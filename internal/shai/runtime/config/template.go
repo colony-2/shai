@@ -8,7 +8,7 @@ import (
 
 var templateExpr = regexp.MustCompile(`\${{\s*([^}]+)\s*}}`)
 
-func expandTemplates(input string, env, vars map[string]string) (string, error) {
+func expandTemplates(input string, env, vars, conf map[string]string) (string, error) {
 	if input == "" {
 		return "", nil
 	}
@@ -41,6 +41,12 @@ func expandTemplates(input string, env, vars map[string]string) (string, error) 
 				return val
 			}
 			expandErr = fmt.Errorf("var %q not found for template %q", name, match)
+			return match
+		case "conf":
+			if val, ok := conf[name]; ok {
+				return val
+			}
+			expandErr = fmt.Errorf("conf %q not found for template %q", name, match)
 			return match
 		default:
 			expandErr = fmt.Errorf("unknown template scope %q in %q", scope, match)

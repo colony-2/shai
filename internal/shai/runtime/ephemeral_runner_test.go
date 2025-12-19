@@ -1,16 +1,18 @@
 package shai
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
-	configpkg "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/config"
+	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuildBootstrapArgsIncludesResources(t *testing.T) {
 	runner := &EphemeralRunner{
 		shaiConfig: &configpkg.Config{
-			User:      "devuser",
+			User:      "shai",
 			Workspace: "/src",
 		},
 		resources: []*configpkg.ResolvedResource{
@@ -47,7 +49,7 @@ func TestBuildBootstrapArgsIncludesResources(t *testing.T) {
 
 	require.Equal(t, []string{
 		"--version", "1",
-		"--user", "devuser",
+		"--user", "shai",
 		"--workspace", "/src",
 		"--rm", "true",
 		"--exec-env", "INSIDE_TOKEN=super-secret",
@@ -64,7 +66,7 @@ func TestBuildBootstrapArgsIncludesResources(t *testing.T) {
 func TestBuildBootstrapArgsMissingEnvFails(t *testing.T) {
 	runner := &EphemeralRunner{
 		shaiConfig: &configpkg.Config{
-			User:      "devuser",
+			User:      "shai",
 			Workspace: "/src",
 		},
 		resources: []*configpkg.ResolvedResource{
@@ -97,4 +99,50 @@ func TestChooseImagePrecedence(t *testing.T) {
 	img, src = chooseImage("base", "  ", "")
 	require.Equal(t, "base", img)
 	require.Equal(t, "", src)
+}
+
+func TestResourceMountsSkipMissingPaths(t *testing.T) {
+	tDir := t.TempDir()
+	existing := filepath.Join(tDir, "existing")
+	err := os.Mkdir(existing, 0o755)
+	require.NoError(t, err)
+
+	runner := &EphemeralRunner{
+		config: EphemeralConfig{
+			WorkingDir: tDir,
+		},
+		resources: []*configpkg.ResolvedResource{
+			{
+				Name: "set",
+				Spec: &configpkg.ResourceSet{
+					Mounts: []configpkg.Mount{
+						{Source: "existing", Target: "/existing", Mode: "rw"},
+						{Source: "missing", Target: "/missing", Mode: "ro"},
+					},
+				},
+			},
+		},
+	}
+
+	mounts, err := runner.resourceMounts()
+	require.NoError(t, err)
+	require.Len(t, mounts, 1)
+	require.Equal(t, existing, mounts[0].Source)
+	require.Equal(t, "/existing", mounts[0].Target)
+	require.False(t, mounts[0].ReadOnly)
+}
+
+func TestEffectiveWorkspaceSinglePath(t *testing.T) {
+	require.Equal(t, "/src/cmd", effectiveWorkspace("/src", []string{"cmd"}))
+	require.Equal(t, "/src", effectiveWorkspace("/src", []string{"."}))
+}
+
+func TestEffectiveWorkspaceDefaults(t *testing.T) {
+	require.Equal(t, "/src", effectiveWorkspace("/src", nil))
+	require.Equal(t, "/src", effectiveWorkspace("/src", []string{"one", "two"}))
+	require.Equal(t, "/src", effectiveWorkspace("/src", []string{"/abs"}))
+}
+
+func TestEffectiveWorkspaceWithDotPrefix(t *testing.T) {
+	require.Equal(t, "/src/cmd", effectiveWorkspace("/src", []string{"./cmd"}))
 }

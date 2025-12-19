@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	shai "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime"
+	shai "github.com/colony-2/shai/internal/shai/runtime"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
@@ -28,18 +28,31 @@ func TestEphemeralContainerFullLifecycle(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "shai-integration-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
+	// Ensure tmpDir has correct permissions
+	require.NoError(t, os.Chmod(tmpDir, 0777))
 
-	// Create test directories
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "tests"), 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755))
+	// Create test directories with permissions that allow container user to write
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0777))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "tests"), 0777))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "docs"), 0777))
+	// Ensure directory permissions are set correctly (not affected by umask)
+	require.NoError(t, os.Chmod(filepath.Join(tmpDir, "src"), 0777))
+	require.NoError(t, os.Chmod(filepath.Join(tmpDir, "tests"), 0777))
+	require.NoError(t, os.Chmod(filepath.Join(tmpDir, "docs"), 0777))
 
 	writeTestShaiConfig(t, tmpDir)
 
-	// Create test files in each directory
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "test.go"), []byte("package main"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "tests", "test_test.go"), []byte("package main_test"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "docs", "README.md"), []byte("# Test"), 0644))
+	// Create test files in each directory with permissions that allow container user to write
+	srcFile := filepath.Join(tmpDir, "src", "test.go")
+	testsFile := filepath.Join(tmpDir, "tests", "test_test.go")
+	docsFile := filepath.Join(tmpDir, "docs", "README.md")
+	require.NoError(t, os.WriteFile(srcFile, []byte("package main"), 0666))
+	require.NoError(t, os.WriteFile(testsFile, []byte("package main_test"), 0666))
+	require.NoError(t, os.WriteFile(docsFile, []byte("# Test"), 0666))
+	// Ensure file permissions are set correctly (not affected by umask)
+	require.NoError(t, os.Chmod(srcFile, 0666))
+	require.NoError(t, os.Chmod(testsFile, 0666))
+	require.NoError(t, os.Chmod(docsFile, 0666))
 
 	t.Run("ephemeral container runs and cleans up", func(t *testing.T) {
 		// Replace os.Stdin with a pipe BEFORE starting runner so we can send "exit" to the shell
@@ -132,14 +145,24 @@ func TestMountPermissionsIntegration(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "shai-mount-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
+	// Ensure tmpDir has correct permissions
+	require.NoError(t, os.Chmod(tmpDir, 0777))
 
-	// Create directories
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "docs"), 0755))
+	// Create directories with permissions that allow container user to write
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0777))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "docs"), 0777))
+	// Ensure directory permissions are set correctly (not affected by umask)
+	require.NoError(t, os.Chmod(filepath.Join(tmpDir, "src"), 0777))
+	require.NoError(t, os.Chmod(filepath.Join(tmpDir, "docs"), 0777))
 
-	// Create test files
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "writable.txt"), []byte("original"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "docs", "readonly.txt"), []byte("original"), 0644))
+	// Create test files with permissions that allow container user to write
+	srcFile := filepath.Join(tmpDir, "src", "writable.txt")
+	docsFile := filepath.Join(tmpDir, "docs", "readonly.txt")
+	require.NoError(t, os.WriteFile(srcFile, []byte("original"), 0666))
+	require.NoError(t, os.WriteFile(docsFile, []byte("original"), 0666))
+	// Ensure file permissions are set correctly (not affected by umask)
+	require.NoError(t, os.Chmod(srcFile, 0666))
+	require.NoError(t, os.Chmod(docsFile, 0666))
 
 	writeTestShaiConfig(t, tmpDir)
 
@@ -399,13 +422,11 @@ func containerExists(t *testing.T, containerID string) bool {
 func writeTestShaiConfig(t *testing.T, dir string) {
 	t.Helper()
 	cfgPath := filepath.Join(dir, shai.DefaultConfigRelPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o777))
 	config := `
 type: shai-sandbox
 version: 1
-image: debian-dev:dev
-user: devuser
-workspace: /src
+image: ghcr.io/colony-2/shai-base:latest
 resources:
   base: {}
 apply:
@@ -416,4 +437,130 @@ apply:
 	if err := os.WriteFile(cfgPath, []byte(strings.TrimSpace(config)+"\n"), 0o644); err != nil {
 		t.Fatalf("write shai config: %v", err)
 	}
+}
+
+// TestCtrlCEnabledAfterBootstrapMarker verifies that ctrl-c is properly enabled
+// after the bootstrap marker appears in the output. This prevents regressions
+// where changes to the bootstrap output format break ctrl-c functionality.
+func TestCtrlCEnabledAfterBootstrapMarker(t *testing.T) {
+	requireDockerAvailable(t)
+
+	tmpDir, err := os.MkdirTemp("", "shai-ctrlc-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+	require.NoError(t, os.Chmod(tmpDir, 0777))
+
+	writeTestShaiConfig(t, tmpDir)
+
+	// Create pipes for stdin/stdout
+	stdinReader, stdinWriter, err := os.Pipe()
+	require.NoError(t, err)
+	defer stdinReader.Close()
+	defer stdinWriter.Close()
+
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	require.NoError(t, err)
+	defer stdoutReader.Close()
+	defer stdoutWriter.Close()
+
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	os.Stdin = stdinReader
+	os.Stdout = stdoutWriter
+	defer func() {
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+	}()
+
+	// Create runner with a command that will wait for input
+	runner, err := shai.NewEphemeralRunner(shai.EphemeralConfig{
+		WorkingDir: tmpDir,
+		Verbose:    false,
+		PostSetupExec: &shai.ExecSpec{
+			Command: []string{"sh", "-c", "echo 'ready'; read line; echo \"got: $line\""},
+			Workdir: "/src",
+			UseTTY:  true,
+		},
+	})
+	require.NoError(t, err)
+	defer runner.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	// Run container in background
+	done := make(chan error, 1)
+	go func() {
+		done <- runner.Run(ctx)
+	}()
+
+	// Expected exact marker based on test config
+	expectedMarker := "Shai sandbox started using [ghcr.io/colony-2/shai-base:latest] as user [shai]. Resource sets: [base]"
+
+	// Read output and verify marker appears
+	outputBuf := &bytes.Buffer{}
+	markerSeen := false
+	readyChan := make(chan bool, 1)
+
+	go func() {
+		scanner := bytes.NewBuffer(nil)
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdoutReader.Read(buf)
+			if n > 0 {
+				chunk := buf[:n]
+				outputBuf.Write(chunk)
+				scanner.Write(chunk)
+
+				// Check for exact bootstrap marker
+				if !markerSeen && bytes.Contains(outputBuf.Bytes(), []byte(expectedMarker)) {
+					markerSeen = true
+				}
+
+				// Check for "ready" output from the shell command
+				if bytes.Contains(scanner.Bytes(), []byte("ready")) {
+					select {
+					case readyChan <- true:
+					default:
+					}
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// Wait for marker and ready signal
+	select {
+	case <-readyChan:
+		// Success - shell is ready
+	case <-time.After(30 * time.Second):
+		t.Fatalf("timeout waiting for shell to be ready")
+	case err := <-done:
+		t.Fatalf("container exited prematurely: %v", err)
+	}
+
+	// Give a moment for marker detection
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify exact marker was seen
+	assert.True(t, markerSeen, "exact bootstrap marker %q should appear in output", expectedMarker)
+
+	// Send input to trigger exit
+	_, err = stdinWriter.Write([]byte("test\n"))
+	require.NoError(t, err)
+	stdinWriter.Close()
+
+	// Wait for completion
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for container to exit")
+	}
+
+	// Verify we got the expected output
+	output := outputBuf.String()
+	assert.Contains(t, output, "got: test", "shell should have received input after marker")
 }

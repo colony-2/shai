@@ -64,11 +64,13 @@ func TestExecStartDetectorStripsMarker(t *testing.T) {
 	var out bytes.Buffer
 	var triggered atomic.Bool
 
-	detector := newExecStartDetector(&out, execStartMarker, func() {
+	// The exact marker that will be output by the bootstrap script
+	marker := "Shai sandbox started using [ghcr.io/colony-2/shai-base:latest] as user [shai]. Resource sets: [foo, bar]"
+	detector := newExecStartDetector(&out, marker, func() {
 		triggered.Store(true)
 	})
 
-	summaryLine := execStartMarker + "Running SHAI sandbox on image [image] as user [dev]. Active resource sets: [foo, bar]\n"
+	summaryLine := marker + "\n"
 	input := []byte("before\n" + summaryLine + "after\n")
 	if _, err := detector.Write(input[:10]); err != nil {
 		t.Fatalf("write chunk 1 failed: %v", err)
@@ -85,6 +87,6 @@ func TestExecStartDetectorStripsMarker(t *testing.T) {
 	}
 	want := "before\n" + summaryLine + "after\n"
 	if got := out.String(); got != want {
-		t.Fatalf("marker should be stripped but summary preserved, got %q", got)
+		t.Fatalf("output should be preserved unchanged, got %q", got)
 	}
 }

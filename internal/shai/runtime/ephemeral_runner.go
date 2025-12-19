@@ -12,7 +12,9 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,13 +22,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/alias"
-	"github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/bootstrap"
-	configpkg "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/config"
+	"github.com/colony-2/shai/internal/shai/runtime/alias"
+	"github.com/colony-2/shai/internal/shai/runtime/bootstrap"
+	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 	"github.com/docker/docker/api/types/container"
 	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
+	networktypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/term"
 )
@@ -44,6 +48,9 @@ type EphemeralConfig struct {
 	Stderr              io.Writer
 	GracefulStopTimeout time.Duration
 	ImageOverride       string
+	UserOverride        string
+	Privileged          bool
+	ShowProgress        bool
 }
 
 // ExecSpec describes a command to run post-setup.
@@ -61,6 +68,7 @@ type EphemeralRunner struct {
 	resources          []*configpkg.ResolvedResource
 	resourceNames      []string
 	image              string
+	workspace          string
 	docker             *client.Client
 	mountBuilder       *MountBuilder
 	aliasSvc           *alias.Service
@@ -68,6 +76,17 @@ type EphemeralRunner struct {
 	hostEnv            map[string]string
 	bootstrapDir       string
 	bootstrapMount     string
+	dockerHostAddr     string
+}
+
+func (r *EphemeralRunner) workspaceDir() string {
+	if ws := strings.TrimSpace(r.workspace); ws != "" {
+		return ws
+	}
+	if r.shaiConfig != nil {
+		return strings.TrimSpace(r.shaiConfig.Workspace)
+	}
+	return ""
 }
 
 // NewEphemeralRunner creates a new ephemeral runner.
@@ -104,6 +123,9 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 		return nil, fmt.Errorf("failed to create mount builder: %w", err)
 	}
 
+	workspace := effectiveWorkspace(shaiCfg.Workspace, mountBuilder.ReadWritePaths)
+	shaiCfg.Workspace = workspace
+
 	resources, resourceNames, applyImageOverride, err := resolvedResources(shaiCfg, mountBuilder.ReadWritePaths, cfg.ResourceSets)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve resources: %w", err)
@@ -113,11 +135,15 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 		return nil, fmt.Errorf("failed to resolve calls: %w", err)
 	}
 
+	dockerHostAddr := getDockerHostAddress()
+	mcpBindAddr := getMCPServerBindAddr(context.Background(), dockerClient)
 	aliasSvc, err := alias.MaybeStart(alias.Config{
-		WorkingDir: cfg.WorkingDir,
-		ShellPath:  os.Getenv("SHELL"),
-		Debug:      os.Getenv("SHAI_ALIAS_DEBUG") != "",
-		Entries:    callEntries,
+		WorkingDir:     cfg.WorkingDir,
+		ShellPath:      os.Getenv("SHELL"),
+		Debug:          os.Getenv("SHAI_ALIAS_DEBUG") != "",
+		Entries:        callEntries,
+		DockerHostAddr: dockerHostAddr,
+		MCPBindAddr:    mcpBindAddr,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize alias service: %w", err)
@@ -134,15 +160,17 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 	}
 
 	runner := &EphemeralRunner{
-		config:        cfg,
-		shaiConfig:    shaiCfg,
-		resources:     resources,
-		resourceNames: resourceNames,
-		image:         image,
-		docker:        dockerClient,
-		mountBuilder:  mountBuilder,
-		aliasSvc:      aliasSvc,
-		hostEnv:       hostEnv,
+		config:         cfg,
+		shaiConfig:     shaiCfg,
+		resources:      resources,
+		resourceNames:  resourceNames,
+		image:          image,
+		workspace:      workspace,
+		docker:         dockerClient,
+		mountBuilder:   mountBuilder,
+		aliasSvc:       aliasSvc,
+		hostEnv:        hostEnv,
+		dockerHostAddr: dockerHostAddr,
 	}
 	if cfg.Verbose {
 		if len(resourceNames) > 0 {
@@ -226,7 +254,9 @@ func (r *EphemeralRunner) runEphemeralContainer(ctx context.Context, useTTY bool
 }
 
 func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTTY bool, idCh chan<- string) error {
-	containerCfg, hostCfg, err := r.buildDockerConfigs(useTTY)
+	containerName := generateContainerName()
+
+	containerCfg, hostCfg, err := r.buildDockerConfigs(useTTY, containerName)
 	if err != nil {
 		return err
 	}
@@ -235,7 +265,7 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 		return err
 	}
 
-	resp, err := r.docker.ContainerCreate(ctx, containerCfg, hostCfg, nil, nil, "")
+	resp, err := r.docker.ContainerCreate(ctx, containerCfg, hostCfg, nil, nil, containerName)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
@@ -295,8 +325,10 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 		errCh <- err
 	}()
 
+	startMarker := r.buildStartMarker()
+
 	if interactiveTTY {
-		writer := newExecStartDetector(os.Stdout, execStartMarker, enableCtrlC)
+		writer := newExecStartDetector(os.Stdout, startMarker, enableCtrlC)
 		go func() {
 			_, err := io.Copy(writer, hijacked.Conn)
 			if closeErr := writer.Close(); err == nil {
@@ -305,7 +337,7 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 			errCh <- err
 		}()
 	} else if useTTY {
-		writer := newExecStartDetector(os.Stdout, execStartMarker, nil)
+		writer := newExecStartDetector(os.Stdout, startMarker, nil)
 		go func() {
 			_, err := io.Copy(writer, hijacked.Conn)
 			if closeErr := writer.Close(); err == nil {
@@ -323,7 +355,7 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 			if stderr == nil {
 				stderr = os.Stderr
 			}
-			writer := newExecStartDetector(stdout, execStartMarker, nil)
+			writer := newExecStartDetector(stdout, startMarker, nil)
 			_, err := stdcopy.StdCopy(writer, stderr, hijacked.Reader)
 			if closeErr := writer.Close(); err == nil {
 				err = closeErr
@@ -364,10 +396,27 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 
 const (
 	bootstrapConfigVersion = 1
-	execStartMarker        = "::SHAI::STARTED::"
 )
 
-func (r *EphemeralRunner) buildDockerConfigs(useTTY bool) (*container.Config, *container.HostConfig, error) {
+// buildStartMarker constructs the exact bootstrap completion marker that the
+// container will output. This marker is used to detect when the bootstrap
+// script has completed and it's safe to enable ctrl-c passthrough.
+func (r *EphemeralRunner) buildStartMarker() string {
+	targetUser := r.shaiConfig.User
+	if r.config.UserOverride != "" {
+		targetUser = r.config.UserOverride
+	}
+
+	resourceSummary := ""
+	if len(r.resourceNames) > 0 {
+		resourceSummary = strings.Join(r.resourceNames, ", ")
+	}
+
+	return fmt.Sprintf("Shai sandbox started using [%s] as user [%s]. Resource sets: [%s]",
+		r.image, targetUser, resourceSummary)
+}
+
+func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) (*container.Config, *container.HostConfig, error) {
 	if err := r.ensureBootstrapScript(); err != nil {
 		return nil, nil, err
 	}
@@ -389,7 +438,8 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool) (*container.Config, *c
 
 	cfg := &container.Config{
 		Image:        r.image,
-		WorkingDir:   r.shaiConfig.Workspace,
+		Hostname:     containerName,
+		WorkingDir:   r.workspaceDir(),
 		Entrypoint:   entrypoint,
 		Cmd:          bootstrapArgs,
 		User:         "root",
@@ -414,13 +464,27 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool) (*container.Config, *c
 		ReadOnly: false,
 	})
 
+	// Determine if container should run in privileged mode
+	privileged := r.config.Privileged || r.hasPrivilegedResource()
+
 	hostCfg := &container.HostConfig{
 		AutoRemove: true,
 		Mounts:     mounts,
-		ExtraHosts: []string{"host.docker.internal:host-gateway"},
+		ExtraHosts: []string{fmt.Sprintf("%s:host-gateway", r.dockerHostAddr)},
 		CapAdd:     []string{"NET_ADMIN"},
+		Privileged: privileged,
 	}
 	return cfg, hostCfg, nil
+}
+
+// hasPrivilegedResource checks if any active resource set has options.privileged:true
+func (r *EphemeralRunner) hasPrivilegedResource() bool {
+	for _, res := range r.resources {
+		if res.Spec != nil && res.Spec.Options.Privileged {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
@@ -432,11 +496,17 @@ func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
 	exec := r.config.PostSetupExec
 	httpList := uniqueHTTPHosts(r.resources)
 	portList := uniquePortEntries(r.resources)
+	rootCommands := collectRootCommands(r.resources)
+
+	targetUser := r.shaiConfig.User
+	if r.config.UserOverride != "" {
+		targetUser = r.config.UserOverride
+	}
 
 	args := []string{
 		"--version", strconv.Itoa(bootstrapConfigVersion),
-		"--user", r.shaiConfig.User,
-		"--workspace", r.shaiConfig.Workspace,
+		"--user", targetUser,
+		"--workspace", r.workspaceDir(),
 		"--rm", "true",
 	}
 
@@ -470,6 +540,10 @@ func (r *EphemeralRunner) buildBootstrapArgs() ([]string, error) {
 	}
 	for _, entry := range portList {
 		args = append(args, "--port-allow", entry)
+	}
+
+	for _, cmd := range rootCommands {
+		args = append(args, "--root-cmd", cmd)
 	}
 
 	if r.config.Verbose {
@@ -506,6 +580,7 @@ func (r *EphemeralRunner) collectEnvMappings() (map[string]string, error) {
 
 func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 	var mounts []mount.Mount
+	var skippedMounts []string
 	for _, res := range r.resources {
 		if res == nil || res.Spec == nil {
 			continue
@@ -516,6 +591,10 @@ func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 				source = filepath.Join(r.config.WorkingDir, source)
 			}
 			if _, err := os.Stat(source); err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					skippedMounts = append(skippedMounts, fmt.Sprintf("%s -> %s", source, m.Target))
+					continue
+				}
 				return nil, fmt.Errorf("resource mount %s: %w", source, err)
 			}
 			mounts = append(mounts, mount.Mount{
@@ -526,6 +605,15 @@ func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 			})
 		}
 	}
+
+	// Print warning about skipped mounts
+	if len(skippedMounts) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: Skipped %d missing resource mount(s):\n", len(skippedMounts))
+		for _, sm := range skippedMounts {
+			fmt.Fprintf(os.Stderr, "  - %s\n", sm)
+		}
+	}
+
 	return mounts, nil
 }
 
@@ -538,6 +626,17 @@ func (r *EphemeralRunner) ensureImage(ctx context.Context, img string) error {
 		return fmt.Errorf("pull image %s: %w", img, err)
 	}
 	defer reader.Close()
+
+	if r.config.ShowProgress {
+		return jsonmessage.DisplayJSONMessagesStream(
+			reader,
+			os.Stdout,
+			os.Stdout.Fd(),
+			term.IsTerminal(os.Stdout.Fd()),
+			nil,
+		)
+	}
+
 	_, _ = io.Copy(io.Discard, reader)
 	return nil
 }
@@ -772,6 +871,23 @@ func uniquePortEntries(resources []*configpkg.ResolvedResource) []string {
 	return entries
 }
 
+func collectRootCommands(resources []*configpkg.ResolvedResource) []string {
+	var commands []string
+	for _, res := range resources {
+		if res == nil || res.Spec == nil {
+			continue
+		}
+		for _, cmd := range res.Spec.RootCommands {
+			trimmed := strings.TrimSpace(cmd)
+			if trimmed == "" {
+				continue
+			}
+			commands = append(commands, trimmed)
+		}
+	}
+	return commands
+}
+
 func (r *EphemeralRunner) ensureBootstrapScript() error {
 	if r.bootstrapMount != "" {
 		return nil
@@ -908,6 +1024,17 @@ func dockerSocketCandidates() []string {
 	return paths
 }
 
+func effectiveWorkspace(base string, rwPaths []string) string {
+	if len(rwPaths) != 1 {
+		return base
+	}
+	rwPath := rwPaths[0]
+	if rwPath == "" || rwPath == "." || filepath.IsAbs(rwPath) {
+		return base
+	}
+	return path.Join(base, rwPath)
+}
+
 func chooseImage(defaultImage, cliOverride, applyOverride string) (string, string) {
 	if img := strings.TrimSpace(cliOverride); img != "" {
 		return img, "cli"
@@ -916,4 +1043,77 @@ func chooseImage(defaultImage, cliOverride, applyOverride string) (string, strin
 		return img, "apply"
 	}
 	return defaultImage, ""
+}
+
+// getDockerHostAddress returns the hostname/address that containers should use to reach the host.
+// On macOS/Windows, this is "host.docker.internal". On Linux, we use "host-gateway" which Docker
+// will resolve to the gateway IP.
+func getDockerHostAddress() string {
+	// host.docker.internal works on macOS and Windows
+	// On Linux with Docker 20.10+, we can use the special "host-gateway" value in ExtraHosts
+	// which Docker automatically resolves to the gateway IP
+	return "host.docker.internal"
+}
+
+// getDockerBridgeGatewayIP queries Docker to find the gateway IP of the default bridge network.
+// This is used to determine what IP address the MCP server should bind to for container access.
+func getDockerBridgeGatewayIP(ctx context.Context, dockerClient *client.Client) (string, error) {
+	if dockerClient == nil {
+		return "", fmt.Errorf("docker client is nil")
+	}
+
+	// Get the default bridge network
+	networks, err := dockerClient.NetworkList(ctx, networktypes.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("list networks: %w", err)
+	}
+
+	// Look for the bridge network
+	for _, network := range networks {
+		if network.Name == "bridge" {
+			if len(network.IPAM.Config) > 0 {
+				gateway := network.IPAM.Config[0].Gateway
+				if gateway != "" {
+					return gateway, nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("bridge network gateway not found")
+}
+
+// getMCPServerBindAddr determines what address the MCP server should bind to.
+// On macOS/Windows (Docker Desktop), we use 127.0.0.1 since host.docker.internal
+// works with localhost via Docker Desktop's VM networking.
+// On Linux, we need to bind to the Docker bridge gateway IP so containers can reach it.
+func getMCPServerBindAddr(ctx context.Context, dockerClient *client.Client) string {
+	// On macOS and Windows, Docker Desktop handles host.docker.internal via VM networking
+	// The MCP server should bind to localhost since the bridge gateway IP doesn't exist
+	// on the host's network interfaces
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return "127.0.0.1:0"
+	}
+
+	// On Linux (native Docker), the bridge gateway IP exists on the host
+	// Bind to it specifically for better security
+	gatewayIP, err := getDockerBridgeGatewayIP(ctx, dockerClient)
+	if err == nil && gatewayIP != "" {
+		return gatewayIP + ":0"
+	}
+
+	// Fallback to binding on all interfaces if we can't determine the bridge IP
+	// This is less secure but ensures functionality
+	return "0.0.0.0:0"
+}
+
+// generateContainerName creates a container name with format "shai-<random>"
+// where random is a short random hex string
+func generateContainerName() string {
+	randomBytes := make([]byte, 4) // 4 bytes = 8 hex chars
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to timestamp-based name if random generation fails
+		return fmt.Sprintf("shai-%d", time.Now().UnixNano())
+	}
+	return "shai-" + hex.EncodeToString(randomBytes)
 }

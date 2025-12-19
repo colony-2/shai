@@ -5,14 +5,23 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
-	"github.com/divisive-ai/vibethis/server/container/pkg/shai"
+	"github.com/colony-2/shai/internal/shai/runtime/config"
+	"github.com/colony-2/shai/pkg/shai"
 	"github.com/spf13/cobra"
 )
 
 const workspacePath = "/src"
+
+// Version information set by GoReleaser at build time
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func main() {
 	os.Args = normalizeLegacyArgs(os.Args)
@@ -29,7 +38,9 @@ func newRootCmd() *cobra.Command {
 		templatePairs  []string
 		resourceSets   []string
 		imageOverride  string
+		userOverride   string
 		containerName  string
+		privileged     bool
 		verbose        bool
 		noTTY          bool
 	)
@@ -62,7 +73,7 @@ func newRootCmd() *cobra.Command {
 			ctx, cancel := setupSignals()
 			defer cancel()
 
-			if err := runEphemeral(ctx, workingDir, readWritePaths, verbose, postExec, configPath, varMap, resourceSets, imageOverride); err != nil {
+			if err := runEphemeral(ctx, workingDir, readWritePaths, verbose, postExec, configPath, varMap, resourceSets, imageOverride, userOverride, privileged); err != nil {
 				return err
 			}
 
@@ -72,16 +83,42 @@ func newRootCmd() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringArrayVar(&readWritePaths, "read-write", nil, "Path to mount read-write (repeatable)")
+	flags.StringArrayVar(&readWritePaths, "read-write", nil, "Path to mount read-write (repeatable, alias: -rw)")
 	flags.StringVarP(&configPath, "config", "c", "", fmt.Sprintf("Path to Shai config (default: <workspace>/%s)", shai.DefaultConfigRelPath))
-	flags.StringArrayVar(&resourceSets, "resource-set", nil, "Resource set to activate (repeatable)")
+	flags.StringArrayVar(&resourceSets, "resource-set", nil, "Resource set to activate (repeatable, alias: -rs)")
 	flags.StringArrayVarP(&templatePairs, "var", "v", nil, fmt.Sprintf("Template variable for %s (key=value)", shai.DefaultConfigRelPath))
 	flags.StringVarP(&imageOverride, "image", "i", "", "Override container image (highest precedence)")
+	flags.StringVarP(&userOverride, "user", "u", "", "Override target user (highest precedence)")
 	flags.StringVarP(&containerName, "name", "n", "", "Container name (optional)")
+	flags.BoolVar(&privileged, "privileged", false, "Run container in privileged mode")
 	flags.BoolVarP(&verbose, "verbose", "V", false, "Enable verbose logging")
 	flags.BoolVarP(&noTTY, "no-tty", "T", false, "Disable TTY for post-setup command")
 
+	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newGenerateCmd())
+
 	return cmd
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("shai %s (commit: %s, built: %s)\n", version, commit, date)
+		},
+	}
+}
+
+func newGenerateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "generate",
+		Short: "Generate default config file",
+		Long:  "Generate a default .shai/config.yaml file in the current directory. Errors if the file already exists.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return generateDefaultConfig()
+		},
+	}
 }
 
 func parseTemplateVars(pairs []string) (map[string]string, error) {
@@ -127,7 +164,7 @@ func normalizeLegacyArgs(args []string) []string {
 	return out
 }
 
-func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verbose bool, postExec *shai.SandboxExec, configPath string, vars map[string]string, resourceSets []string, imageOverride string) error {
+func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verbose bool, postExec *shai.SandboxExec, configPath string, vars map[string]string, resourceSets []string, imageOverride, userOverride string, privileged bool) error {
 	sandbox, err := shai.NewSandbox(shai.SandboxConfig{
 		WorkingDir:     workingDir,
 		ConfigFile:     configPath,
@@ -137,6 +174,9 @@ func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verb
 		Verbose:        verbose,
 		PostSetupExec:  postExec,
 		ImageOverride:  imageOverride,
+		UserOverride:   userOverride,
+		Privileged:     privileged,
+		ShowProgress:   true,
 	})
 	if err != nil {
 		return err
@@ -144,6 +184,34 @@ func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verb
 	defer sandbox.Close()
 
 	return sandbox.Run(ctx)
+}
+
+func generateDefaultConfig() error {
+	configDir := shai.ConfigDirName
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Check if config file already exists
+	if _, err := os.Stat(configPath); err == nil {
+		return fmt.Errorf("config file already exists at %s", configPath)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check config file: %w", err)
+	}
+
+	// Create .shai directory if it doesn't exist
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create %s directory: %w", configDir, err)
+	}
+
+	// Get default config content
+	defaultConfig := config.GetDefaultConfigBytes()
+
+	// Write config file
+	if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	fmt.Printf("Generated default config at %s\n", configPath)
+	return nil
 }
 
 // setupSignals configures signal handling and returns a cancellable context.

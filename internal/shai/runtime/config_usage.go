@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/alias"
-	configpkg "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/config"
+	"github.com/colony-2/shai/internal/shai/runtime/alias"
+	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 )
 
 func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []string) ([]*configpkg.ResolvedResource, []string, string, error) {

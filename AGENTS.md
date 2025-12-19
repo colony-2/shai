@@ -67,7 +67,7 @@ type SandboxSession struct {
 ```go
 import (
   "context"
-  shai "github.com/divisive-ai/vibethis/server/container/pkg/shai"
+  shai "github.com/colony-2/shai/pkg/shai"
 )
 
 func startProcess(ctx context.Context, repoRoot string, logs io.Writer) (*shai.SandboxSession, error) {

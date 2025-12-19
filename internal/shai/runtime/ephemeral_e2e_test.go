@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	shai "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime"
+	shai "github.com/colony-2/shai/internal/shai/runtime"
 )
 
 // This test exercises the full EphemeralRunner path against a real Docker daemon.
@@ -21,9 +21,7 @@ func TestEphemeralRunner_E2ECommonUtils(t *testing.T) {
 	cfg := `
 type: shai-sandbox
 version: 1
-image: debian-dev:dev
-user: devuser
-workspace: /src
+image: ghcr.io/colony-2/shai-base:latest
 resources:
   base: {}
 apply:
@@ -32,7 +30,7 @@ apply:
       - base
 `
 	cfgPath := filepath.Join(tmpDir, shai.DefaultConfigRelPath)
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o777); err != nil {
 		t.Fatalf("mkdir shai config dir: %v", err)
 	}
 	if err := os.WriteFile(cfgPath, []byte(strings.TrimSpace(cfg)+"\n"), 0o644); err != nil {
@@ -73,9 +71,7 @@ func TestEphemeralRunner_ProxyStack(t *testing.T) {
 	cfg := `
 type: shai-sandbox
 version: 1
-image: debian-dev:dev
-user: devuser
-workspace: /src
+image: ghcr.io/colony-2/shai-base:latest
 resources:
   base:
     http:
@@ -86,7 +82,7 @@ apply:
       - base
 `
 	cfgPath := filepath.Join(tmpDir, shai.DefaultConfigRelPath)
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o777); err != nil {
 		t.Fatalf("mkdir shai config dir: %v", err)
 	}
 	if err := os.WriteFile(cfgPath, []byte(strings.TrimSpace(cfg)+"\n"), 0o644); err != nil {

@@ -1,8 +1,6 @@
 type: shai-sandbox
 version: 1
-image: ghcr.io/divisive-ai/dev:latest
-user: devuser
-workspace: /src
+image: ghcr.io/colony-2/shai-mega
 resources:
   global:
     vars:
@@ -12,10 +10,10 @@ resources:
         target: SPECIAL_OPENAI_API_KEY # only needs to be defined if different.
     mounts:
       - source: ${{ env.HOME }}/.ssh
-        target: /home/devuser/.ssh
+        target: /home/${{ conf.TARGET_USER }}/.ssh
         mode: rw
       - source: ${{ env.HOME }}/.gnupg
-        target: /home/devuser/.gnupg
+        target: /home/${{ conf.TARGET_USER }}/.gnupg
     calls: # exposed inside the container through the MCP call server
       - name: git-sync
         command: git pull --rebase
@@ -32,6 +30,11 @@ resources:
     ports: # other network holes to make
       - host: github.com
         port: 443
+    # root-commands: # optional commands to run as root before switching to target user
+    #   - "systemctl start docker"
+    #   - "modprobe nbd"
+    # options: # optional settings
+    #   privileged: false # run container in privileged mode (use with caution)
   dir1:
     vars:
       - source: OPENAI_API_KEY
@@ -43,4 +46,4 @@ apply:
   - path: ./dir1
     resources:
       - dir1
-    image: ghcr.io/divisive-ai/dev:dir1
+    image: ghcr.io/colony-2/shai-mega:dir1

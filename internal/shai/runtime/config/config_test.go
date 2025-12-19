@@ -23,8 +23,6 @@ func TestLoadConfigHappyPath(t *testing.T) {
 type: shai-sandbox
 version: 1
 image: ghcr.io/example/image:latest
-user: devuser
-workspace: /src
 resources:
   global:
     vars:
@@ -32,7 +30,7 @@ resources:
         target: AXYZ
     mounts:
       - source: ${{ env.HOME }}/.ssh
-        target: /home/devuser/.ssh
+        target: /home/${{ conf.TARGET_USER }}/.ssh
         mode: rw
     calls:
       - name: git-sync
@@ -60,12 +58,13 @@ apply:
 	cfg, err := Load(path, env, map[string]string{})
 	require.NoError(t, err)
 
-	assert.Equal(t, "devuser", cfg.User)
+	assert.Equal(t, "shai", cfg.User)
 	assert.Equal(t, "/src", cfg.Workspace)
 	res := cfg.Resources["global"]
 	require.NotNil(t, res)
 	require.Len(t, res.Mounts, 1)
 	assert.Equal(t, "/Users/test/.ssh", res.Mounts[0].Source)
+	assert.Equal(t, "/home/shai/.ssh", res.Mounts[0].Target)
 	assert.Equal(t, "rw", res.Mounts[0].Mode)
 
 	rootResources := cfg.ResourcesForPath("docs")
@@ -83,8 +82,6 @@ func TestLoadConfigUnknownResource(t *testing.T) {
 type: shai-sandbox
 version: 1
 image: ghcr.io/example/image:latest
-user: devuser
-workspace: /src
 resources:
   base: {}
 apply:
@@ -102,8 +99,6 @@ func TestLoadConfigDuplicateCall(t *testing.T) {
 type: shai-sandbox
 version: 1
 image: ghcr.io/example/image:latest
-user: devuser
-workspace: /src
 resources:
   first:
     calls:
@@ -130,8 +125,6 @@ func TestApplyRulesRequireSegmentMatch(t *testing.T) {
 type: shai-sandbox
 version: 1
 image: ghcr.io/example/image:latest
-user: devuser
-workspace: /src
 resources:
   bar-only: {}
 apply:
@@ -153,8 +146,6 @@ func TestApplyRootImageOverrideDisallowed(t *testing.T) {
 type: shai-sandbox
 version: 1
 image: ghcr.io/example/image:latest
-user: devuser
-workspace: /src
 resources:
   base: {}
 apply:
@@ -173,8 +164,6 @@ func TestImageForPathPrefersMostSpecific(t *testing.T) {
 type: shai-sandbox
 version: 1
 image: ghcr.io/example/image:latest
-user: devuser
-workspace: /src
 resources:
   base: {}
 apply:
@@ -221,7 +210,9 @@ func TestLoadOrDefaultFallsBack(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".shai", "config.yaml")
 
-	cfg, usedDefault, err := LoadOrDefault(path, map[string]string{}, map[string]string{})
+	// Provide HOME environment variable for template expansion in default config
+	env := map[string]string{"HOME": "/home/testuser"}
+	cfg, usedDefault, err := LoadOrDefault(path, env, map[string]string{})
 	require.NoError(t, err)
 	assert.True(t, usedDefault)
 	require.NotNil(t, cfg)

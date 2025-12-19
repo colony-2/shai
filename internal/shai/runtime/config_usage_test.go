@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/config"
+	"github.com/colony-2/shai/internal/shai/runtime/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

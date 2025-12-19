@@ -204,7 +204,7 @@ WORKSPACE=""
 IMAGE_NAME=""
 PROXY_PORT=${PROXY_PORT:-18888}
 DNS_PORT=${DNS_PORT:-1053}
-REQUESTED_DEV_UID=${DEV_UID:-1000}
+REQUESTED_DEV_UID=${DEV_UID:-4747}
 RM_SELF="false"
 
 declare -a EXEC_ENVS=()
@@ -212,6 +212,7 @@ declare -a EXEC_CMD=()
 declare -a HTTP_ALLOW=()
 declare -a PORT_ALLOW=()
 declare -a RESOURCE_NAMES=()
+declare -a ROOT_CMDS=()
 
 require_arg() {
   if [ $# -lt 2 ]; then
@@ -269,6 +270,11 @@ while [ $# -gt 0 ]; do
     --resource-name)
       require_arg "$@"
       RESOURCE_NAMES+=("$2")
+      shift 2
+      ;;
+    --root-cmd)
+      require_arg "$@"
+      ROOT_CMDS+=("$2")
       shift 2
       ;;
     --verbose)
@@ -400,6 +406,9 @@ user=root
 autorestart=true
 stdout_logfile=$DNSMASQ_STDOUT_LOG
 stderr_logfile=$DNSMASQ_STDERR_LOG
+
+[include]
+files = /etc/supervisor/conf.d/*.conf
 SUPERVISOR_CONF
 }
 
@@ -460,7 +469,7 @@ dev_egress_setup() {
 
     if command -v ping >/dev/null 2>&1; then
       if ping_output=$(ping -c1 -W1 "$name" 2>/dev/null); then
-        ip=$(printf '%s' "$ping_output" | sed -n '1s/.*(\(.*\)).*/\1/p')
+        ip=$(printf '%s' "$ping_output" | sed -n '1s/[^(]*(\([^)]*\)).*/\1/p')
       fi
     fi
 
@@ -474,6 +483,9 @@ dev_egress_setup() {
   if command -v iptables >/dev/null 2>&1; then
     ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -o lo -j ACCEPT
     ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -p tcp -d 127.0.0.1 --dport "$proxy_port" -j ACCEPT
+    # Force all DNS requests through the local dnsmasq instance.
+    ensure_rule nat OUTPUT -m owner --uid-owner "$dev_uid" -p udp --dport 53 -j REDIRECT --to-ports "$dns_port"
+    ensure_rule nat OUTPUT -m owner --uid-owner "$dev_uid" -p tcp --dport 53 -j REDIRECT --to-ports "$dns_port"
     ensure_rule nat OUTPUT -m owner --uid-owner "$dev_uid" -p udp --dport "$dns_port" -j REDIRECT --to-ports "$dns_port"
     ensure_rule nat OUTPUT -m owner --uid-owner "$dev_uid" -p tcp --dport "$dns_port" -j REDIRECT --to-ports "$dns_port"
     ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -p udp -d 127.0.0.1 --dport "$dns_port" -j ACCEPT
@@ -503,6 +515,14 @@ dev_egress_setup() {
   fi
 
   if command -v ip6tables >/dev/null 2>&1; then
+    if ip6tables -t nat -L OUTPUT >/dev/null 2>&1; then
+      ensure_rule6 nat OUTPUT -m owner --uid-owner "$dev_uid" -p udp --dport 53 -j REDIRECT --to-ports "$dns_port"
+      ensure_rule6 nat OUTPUT -m owner --uid-owner "$dev_uid" -p tcp --dport 53 -j REDIRECT --to-ports "$dns_port"
+      ensure_rule6 nat OUTPUT -m owner --uid-owner "$dev_uid" -p udp --dport "$dns_port" -j REDIRECT --to-ports "$dns_port"
+      ensure_rule6 nat OUTPUT -m owner --uid-owner "$dev_uid" -p tcp --dport "$dns_port" -j REDIRECT --to-ports "$dns_port"
+    else
+      log_verbose "ip6tables nat table unavailable; skipping IPv6 DNS redirect"
+    fi
     ensure_rule6 filter OUTPUT -m owner --uid-owner "$dev_uid" -p tcp -d ::1 --dport "$proxy_port" -j ACCEPT
     ensure_rule6 filter OUTPUT -m owner --uid-owner "$dev_uid" -p udp -d ::1 --dport "$dns_port" -j ACCEPT
     ensure_rule6 filter OUTPUT -m owner --uid-owner "$dev_uid" -p tcp -d ::1 --dport "$dns_port" -j ACCEPT
@@ -511,18 +531,65 @@ dev_egress_setup() {
       ip6tables -S OUTPUT || true
     fi
   fi
+
+  # Log iptables rules to file for non-root users to reference
+  local log_dir="/var/log/shai"
+  local log_file="$log_dir/iptables.out"
+  mkdir -p "$log_dir" 2>/dev/null || true
+  {
+    echo "# iptables rules (generated at $(date))"
+    echo "# IPv4 filter table OUTPUT chain:"
+    if command -v iptables >/dev/null 2>&1; then
+      iptables -t filter -S OUTPUT 2>/dev/null || echo "# Failed to dump IPv4 filter rules"
+    fi
+    echo ""
+    echo "# IPv4 nat table OUTPUT chain:"
+    if command -v iptables >/dev/null 2>&1; then
+      iptables -t nat -S OUTPUT 2>/dev/null || echo "# Failed to dump IPv4 nat rules"
+    fi
+    echo ""
+    echo "# IPv6 filter table OUTPUT chain:"
+    if command -v ip6tables >/dev/null 2>&1; then
+      ip6tables -t filter -S OUTPUT 2>/dev/null || echo "# Failed to dump IPv6 filter rules"
+    fi
+    echo ""
+    echo "# IPv6 nat table OUTPUT chain:"
+    if command -v ip6tables >/dev/null 2>&1; then
+      ip6tables -t nat -S OUTPUT 2>/dev/null || echo "# Failed to dump IPv6 nat rules"
+    fi
+  } > "$log_file" 2>/dev/null || true
+  chmod 644 "$log_file" 2>/dev/null || true
+  log_verbose "iptables rules logged to $log_file"
 }
 ensure_user() {
   local user=$1
   if id "$user" >/dev/null 2>&1; then
     return
   fi
-  local args=(-m)
+  local args=()
+  local home_dir="/home/$user"
+
+  # Check if home directory already exists (e.g., from volume mount)
+  if [ -d "$home_dir" ]; then
+    # Don't create home directory, it already exists
+    args+=(-M)
+    debug "creating user $user (home directory already exists)"
+  else
+    # Create home directory normally
+    args+=(-m)
+    debug "creating user $user with new home directory"
+  fi
+
   if [ -n "$REQUESTED_DEV_UID" ]; then
     args+=(-u "$REQUESTED_DEV_UID")
   fi
-  debug "creating user $user ${REQUESTED_DEV_UID:+(uid=$REQUESTED_DEV_UID)}"
-  useradd "${args[@]}" -s /bin/bash "$user"
+
+  useradd "${args[@]}" -d "$home_dir" -s /bin/bash "$user"
+
+  # If home directory existed, ensure proper ownership
+  if [ -d "$home_dir" ]; then
+    chown -R "$user:$user" "$home_dir" 2>/dev/null || true
+  fi
 }
 
 IS_ROOT=1
@@ -558,6 +625,7 @@ generate_dnsmasq_allowlist "$ALLOWLIST_FILE" "$DNS_ALLOW_FILE"
 if [ "$IS_ROOT" -eq 1 ]; then
   debug "ensuring log directories"
   mkdir -p "$SHAI_LOG_DIR" "$TINYPROXY_LOG_DIR" "$DNSMASQ_LOG_DIR"
+  mkdir -p /etc/supervisor/conf.d
   chown tinyproxy:tinyproxy "$TINYPROXY_LOG_DIR" "$TINYPROXY_RUN_DIR" 2>/dev/null || true
 
   SUP_PIDFILE=$SUPERVISOR_PID
@@ -630,6 +698,19 @@ if [ -f "$PROXY_ENV_FILE" ]; then
 fi
 EOF
   chmod 0644 "$PROFILE_SNIPPET"
+
+  # Also add to zshenv for zsh shells (non-login shells)
+  if [ -f /etc/zsh/zshenv ]; then
+    if ! grep -q "$PROXY_ENV_FILE" /etc/zsh/zshenv 2>/dev/null; then
+      cat >>/etc/zsh/zshenv <<EOF
+
+# Source proxy configuration from shai bootstrap
+if [ -f "$PROXY_ENV_FILE" ]; then
+  . "$PROXY_ENV_FILE"
+fi
+EOF
+    fi
+  fi
 fi
 
 for pair in "${EXEC_ENVS[@]}"; do
@@ -643,6 +724,19 @@ done
 
 cd "$WORKSPACE" 2>/dev/null || die "failed to enter workspace $WORKSPACE"
 
+# Execute root commands if running as root
+if [ "$IS_ROOT" -eq 1 ] && [ ${#ROOT_CMDS[@]} -gt 0 ]; then
+  log_verbose "executing ${#ROOT_CMDS[@]} root command(s)"
+  for cmd in "${ROOT_CMDS[@]}"; do
+    if [ -n "$cmd" ]; then
+      log_verbose "executing root command: $cmd"
+      if ! eval "$cmd"; then
+        die "root command failed (exit $?): $cmd"
+      fi
+    fi
+  done
+fi
+
 argv=("${EXEC_CMD[@]}")
 if [ ${#argv[@]} -eq 0 ]; then
   argv=("$user_shell" "-l")
@@ -654,11 +748,11 @@ if [ ${#RESOURCE_NAMES[@]} -gt 0 ]; then
   resource_summary=${resource_summary%, }
 fi
 image_desc=${IMAGE_NAME:-unknown}
-summary_message="Running SHAI sandbox on image [$image_desc] as user [$TARGET_USER]. Active resource sets: [$resource_summary]"
+summary_message="Shai sandbox started using [$image_desc] as user [$TARGET_USER]. Resource sets: [$resource_summary]"
 
 # Notify host-side runner that setup has completed; the host strips the marker
 # prefix but relays the summary message to the user/stdout.
-printf '%s%s\n' "::SHAI::STARTED::" "$summary_message"
+printf '%s\n' "$summary_message"
 
 if [ "$IS_ROOT" -eq 1 ]; then
   if command -v runuser >/dev/null 2>&1; then

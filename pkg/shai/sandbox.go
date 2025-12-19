@@ -3,7 +3,7 @@ package shai
 import (
 	"context"
 
-	runtimepkg "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime"
+	runtimepkg "github.com/colony-2/shai/internal/shai/runtime"
 )
 
 // Sandbox provides lifecycle operations for an ephemeral Shai environment.

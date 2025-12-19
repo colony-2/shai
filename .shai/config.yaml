@@ -1,8 +1,6 @@
 type: shai-sandbox
 version: 1
-image: debian-dev:dev
-user: devuser
-workspace: /src
+image: ghcr.io/colony-2/shai-mega:dind-latest
 resources:
   default:
     calls:
@@ -16,16 +14,16 @@ resources:
         target: /go/mod
         mode: rw
       - source: ${{ env.HOME }}/.codex
-        target: /home/devuser/.codex
+        target: /home/${{ conf.TARGET_USER }}/.codex
         mode: rw
       - source: ${{ env.HOME }}/.claude
-        target: /home/devuser/.claude
+        target: /home/${{ conf.TARGET_USER }}/.claude
         mode: rw
       - source: ${{ env.HOME }}/.claude.json
-        target: /home/devuser/.claude.json
+        target: /home/${{ conf.TARGET_USER }}/.claude.json
         mode: rw
       - source: ${{ env.HOME }}/.claude.json.backup
-        target: /home/devuser/.claude.json.backup
+        target: /home/${{ conf.TARGET_USER }}/.claude.json.backup
         mode: rw
     http:
       - openai.com
@@ -100,6 +98,33 @@ resources:
     ports:
       - host: github.com
         port: 22
+    options:
+      privileged: true
+    root-commands:
+      - |
+        socket="/var/run/docker.sock"
+        
+        # Initial quick check
+        if [ ! -S "$socket" ]; then
+          sleep 0.2
+          if [ ! -S "$socket" ]; then
+            echo "Waiting for $socket..."
+        
+            # Now loop for the remainder of the 2s (approx 1.7s left)
+            count=0
+            while [ ! -S "$socket" ] && [ $count -lt 18 ]; do
+              sleep 0.1
+              ((count++))
+            done
+          fi
+        fi
+    
+        if [ -S "$socket" ]; then
+          chmod 666 "$socket"
+        else
+          echo "Docker socket not available within 2s" >&2
+          exit 1
+        fi
 apply:
   - path: ./
     resources:

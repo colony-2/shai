@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	shai "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime"
+	shai "github.com/colony-2/shai/internal/shai/runtime"
 	"github.com/stretchr/testify/require"
 )
 
-const testImage = "debian-dev:dev"
+const testImage = "ghcr.io/colony-2/shai-base:latest"
 
 func TestAliasIntegrationListShowsAliases(t *testing.T) {
 	workspace := setupAliasWorkspace(t)
@@ -112,7 +112,7 @@ func setupAliasWorkspace(t *testing.T) string {
 	writeShaiConfig(t, workspace)
 
 	scriptsDir := filepath.Join(workspace, "scripts")
-	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+	if err := os.MkdirAll(scriptsDir, 0o777); err != nil {
 		t.Fatalf("create scripts dir: %v", err)
 	}
 
@@ -171,13 +171,11 @@ func requireDocker(t *testing.T) {
 func writeShaiConfig(t *testing.T, workspace string) {
 	t.Helper()
 	cfgPath := filepath.Join(workspace, shai.DefaultConfigRelPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o777))
 	config := fmt.Sprintf(`
 type: shai-sandbox
 version: 1
 image: %s
-user: devuser
-workspace: /src
 resources:
   global:
     calls:

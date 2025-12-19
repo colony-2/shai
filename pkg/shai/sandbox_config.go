@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	runtimepkg "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime"
+	runtimepkg "github.com/colony-2/shai/internal/shai/runtime"
 )
 
 // SandboxConfig describes how to launch a sandbox.
@@ -23,6 +23,9 @@ type SandboxConfig struct {
 	Stderr              io.Writer
 	GracefulStopTimeout time.Duration
 	ImageOverride       string
+	UserOverride        string
+	Privileged          bool
+	ShowProgress        bool
 }
 
 // SandboxExec describes a command to run inside the sandbox after setup.
@@ -101,6 +104,13 @@ func WithImageOverride(image string) SandboxConfigOption {
 	}
 }
 
+// WithUserOverride forces a target user.
+func WithUserOverride(user string) SandboxConfigOption {
+	return func(cfg *SandboxConfig) {
+		cfg.UserOverride = user
+	}
+}
+
 // WithVerbose toggles verbose logging.
 func WithVerbose(verbose bool) SandboxConfigOption {
 	return func(cfg *SandboxConfig) {
@@ -130,6 +140,9 @@ func (cfg SandboxConfig) runtimeConfig() runtimepkg.EphemeralConfig {
 		Stderr:              normalized.Stderr,
 		GracefulStopTimeout: normalized.GracefulStopTimeout,
 		ImageOverride:       normalized.ImageOverride,
+		UserOverride:        normalized.UserOverride,
+		Privileged:          normalized.Privileged,
+		ShowProgress:        normalized.ShowProgress,
 	}
 }
 

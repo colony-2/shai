@@ -1,0 +1,136 @@
+project_name: shai
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: shai
+    binary: shai
+    main: ./cmd/shai
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - docs/*
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'typo'
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: colony-2
+    name: shai
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Shai {{.Version}}
+
+    Release of Shai sandbox orchestrator.
+
+  footer: |
+    **Full Changelog**: https://github.com/colony-2/shai/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids:
+        - shai
+      sign:
+        # Path to the .p12 file or its base64 content
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.APPLE_API_ISSUER}}"
+        key_id: "{{.Env.APPLE_API_KEY_ID}}"
+        # Path to the .p8 key file or its content
+        key: "{{.Env.APPLE_API_KEY}}"
+        # Wait for the notarization to finish (required for a valid release)
+        wait: true
+
+# npm publishing - GoReleaser Pro feature
+npms:
+  - name: "@colony2/shai"
+    homepage: https://github.com/colony-2/shai
+    description: Sandboxing shell for running AI coding agents inside Docker containers
+    license: MIT
+    extra:
+      author:
+        name: Colony 2
+        email: noreply@colony2.io
+      keywords:
+        - sandbox
+        - docker
+        - ai
+        - agent
+        - cli
+        - security
+      repository:
+        type: git
+        url: git+https://github.com/colony-2/shai.git
+      bugs:
+        url: https://github.com/colony-2/shai/issues
+      engines:
+        node: ">=14.0.0"
+
+# Homebrew tap publishing
+homebrew_casks:
+  - name: shai
+    repository:
+      owner: colony-2
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: colony2-bot
+      email: bot@colony2.io
+    commit_msg_template: "Cask update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/colony-2/shai"
+    description: "Sandboxing shell for running AI coding agents inside Docker containers"
+    license: "MIT"

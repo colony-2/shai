@@ -6,6 +6,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,11 +15,60 @@ import (
 	"testing"
 	"time"
 
-	"github.com/divisive-ai/vibethis/server/container/pkg/shai"
+	"github.com/colony-2/shai/pkg/shai"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testImage = "ghcr.io/colony-2/shai-base:latest"
+
+// TestMain runs before all tests in this package to pre-pull required Docker images
+func TestMain(m *testing.M) {
+
+	fmt.Printf("Pre-pulling Docker image %s (this may take a while)...\n", testImage)
+	if err := pullDockerImage(testImage); err != nil {
+		fmt.Printf("Warning: failed to pre-pull image %s: %v\n", testImage, err)
+		fmt.Println("Tests will attempt to pull the image themselves")
+	} else {
+		fmt.Printf("Successfully pulled image %s\n", testImage)
+	}
+
+	os.Exit(m.Run())
+}
+
+// pullDockerImage pulls a Docker image without timeout, reporting progress to stdout
+func pullDockerImage(image string) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("create docker client: %w", err)
+	}
+	defer cli.Close()
+
+	ctx := context.Background()
+
+	// Check if image already exists
+	if _, _, err := cli.ImageInspectWithRaw(ctx, image); err == nil {
+		fmt.Printf("Image %s already exists locally\n", image)
+		return nil
+	}
+
+	// Pull the image
+	fmt.Printf("Pulling image %s...\n", image)
+	reader, err := cli.ImagePull(ctx, image, imagetypes.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("image pull: %w", err)
+	}
+	defer reader.Close()
+
+	// Copy output to stdout to show progress
+	if _, err := io.Copy(os.Stdout, reader); err != nil {
+		return fmt.Errorf("read pull output: %w", err)
+	}
+
+	return nil
+}
 
 // TestCLI_EphemeralShell_StartsAndEchoes runs the shai CLI, starts a shell, echoes output, and exits
 func TestCLI_EphemeralShell_StartsAndEchoes(t *testing.T) {
@@ -29,9 +80,7 @@ func TestCLI_EphemeralShell_StartsAndEchoes(t *testing.T) {
 	shaiCfg := `
 type: shai-sandbox
 version: 1
-image: debian-dev:dev
-user: devuser
-workspace: /src
+image: ghcr.io/colony-2/shai-base:latest
 resources:
   base: {}
 apply:

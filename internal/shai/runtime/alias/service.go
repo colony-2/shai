@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/alias/mcp"
+	"github.com/colony-2/shai/internal/shai/runtime/alias/mcp"
 )
 
 const (
@@ -21,17 +21,20 @@ const (
 
 // Config contains inputs required to start the alias subsystem.
 type Config struct {
-	WorkingDir string
-	ShellPath  string
-	Debug      bool
-	Entries    []*Entry
+	WorkingDir     string
+	ShellPath      string
+	Debug          bool
+	Entries        []*Entry
+	DockerHostAddr string
+	MCPBindAddr    string
 }
 
 // Service manages the lifecycle of the alias MCP server.
 type Service struct {
-	env       []string
-	server    *mcp.Server
-	closeOnce sync.Once
+	env            []string
+	server         *mcp.Server
+	closeOnce      sync.Once
+	dockerHostAddr string
 }
 
 // MaybeStart initializes the alias system, even if no entries are supplied.
@@ -67,6 +70,16 @@ func MaybeStart(cfg Config) (*Service, error) {
 		shellPath = defaultShell
 	}
 
+	dockerHostAddr := cfg.DockerHostAddr
+	if strings.TrimSpace(dockerHostAddr) == "" {
+		dockerHostAddr = "host.docker.internal"
+	}
+
+	mcpBindAddr := cfg.MCPBindAddr
+	if strings.TrimSpace(mcpBindAddr) == "" {
+		mcpBindAddr = "0.0.0.0:0"
+	}
+
 	token, err := randomBase64(32)
 	if err != nil {
 		return nil, fmt.Errorf("generate alias token: %w", err)
@@ -83,6 +96,7 @@ func MaybeStart(cfg Config) (*Service, error) {
 	}
 
 	server, err := mcp.NewServer(mcp.Config{
+		BindAddr:      mcpBindAddr,
 		Token:         token,
 		SessionID:     sessionID,
 		Executor:      newAliasExecutorAdapter(executor, entries),
@@ -95,15 +109,16 @@ func MaybeStart(cfg Config) (*Service, error) {
 
 	port := server.Port()
 	envList := []string{
-		fmt.Sprintf("SHAI_ALIAS_ENDPOINT=http://%s:%d/mcp", containerHostAlias(), port),
+		fmt.Sprintf("SHAI_ALIAS_ENDPOINT=http://%s:%d/mcp", dockerHostAddr, port),
 		fmt.Sprintf("SHAI_ALIAS_TOKEN=%s", token),
 		fmt.Sprintf("SHAI_ALIAS_SESSION_ID=%s", sessionID),
 		fmt.Sprintf("ALLOW_DOCKER_HOST_PORT=%d", port),
 	}
 
 	return &Service{
-		env:    envList,
-		server: server,
+		env:            envList,
+		server:         server,
+		dockerHostAddr: dockerHostAddr,
 	}, nil
 }
 
@@ -124,10 +139,6 @@ func (s *Service) Close() {
 			_ = s.server.Close(context.Background())
 		}
 	})
-}
-
-func containerHostAlias() string {
-	return "host.docker.internal"
 }
 
 func randomBase64(length int) (string, error) {

@@ -1,0 +1,92 @@
+name: Build and Push shai-mega Docker Image
+
+on:
+  push:
+    paths:
+      - 'docker/mega/**'
+      - '.github/workflows/docker-mega.yaml'
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-arch:
+    strategy:
+      matrix:
+        include:
+          # Standard variant (debian:bookworm-slim)
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            variant: standard
+            base_image: debian:bookworm-slim
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            platform: linux/arm64
+            variant: standard
+            base_image: debian:bookworm-slim
+          # DinD variant (cruizba/ubuntu-dind)
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            variant: dind
+            base_image: cruizba/ubuntu-dind
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            platform: linux/arm64
+            variant: dind
+            base_image: cruizba/ubuntu-dind
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push arch-specific image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/mega
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ghcr.io/colony-2/shai-mega:${{ matrix.variant }}-latest-${{ matrix.arch }}
+          build-args: |
+            BASE_IMAGE=${{ matrix.base_image }}
+          cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ matrix.arch }}
+
+  create-manifest:
+    needs: build-arch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push standard multi-arch manifest
+        run: |
+          docker buildx imagetools create -t ghcr.io/colony-2/shai-mega:latest \
+            ghcr.io/colony-2/shai-mega:standard-latest-amd64 \
+            ghcr.io/colony-2/shai-mega:standard-latest-arm64
+
+      - name: Create and push dind multi-arch manifest
+        run: |
+          docker buildx imagetools create -t ghcr.io/colony-2/shai-mega:dind-latest \
+            ghcr.io/colony-2/shai-mega:dind-latest-amd64 \
+            ghcr.io/colony-2/shai-mega:dind-latest-arm64

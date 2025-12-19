@@ -1,10 +1,6 @@
-module github.com/divisive-ai/vibethis/server/container
+module github.com/colony-2/shai
 
-go 1.23.0
-
-toolchain go1.24.1
-
-replace github.com/divisive-ai/vibethis/server/core => ../core
+go 1.24.1
 
 require (
 	github.com/docker/docker v28.3.0+incompatible

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/divisive-ai/vibethis/server/container/internal/container"
-	configpkg "github.com/divisive-ai/vibethis/server/container/internal/shai/runtime/config"
+	"github.com/colony-2/shai/internal/container"
+	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 )
 
 // Config represents shai configuration
