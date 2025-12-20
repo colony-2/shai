@@ -1,5 +1,10 @@
 # shai - a sandboxing shell for ai coding agents
 
+[![npm version](https://img.shields.io/npm/v/@colony2/shai.svg)](https://www.npmjs.com/package/@colony2/shai)
+[![Homebrew](https://img.shields.io/badge/homebrew-shai-blue.svg)](https://github.com/colony-2/homebrew-tap)
+[![Docker Image shai-base](https://img.shields.io/badge/ghcr.io-shai--base-blue.svg)](https://github.com/colony-2/shai/pkgs/container/shai-base)
+[![Docker Image shai-mega](https://img.shields.io/badge/ghcr.io-shai--mega-blue.svg)](https://github.com/colony-2/shai/pkgs/container/shai-mega)
+
 Shai (pronounced "shy") is a sandboxing tool for running CLI-based AI agents inside containers. At it's core, running `shai` will place your terminal inside a container mounted at the current path. This container mounts a read-only copy of your current path at /src as a non-root user and restricts network access to a select list of http and https destinations. All other network traffic is blocked. This is the perfect sandbox for running CLI agents like [Codex](https://github.com/openai/codex), [Claude Code](https://github.com/anthropics/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Cline](https://github.com/cline/cline), [OpenHands](https://github.com/OpenHands/OpenHands), etc.
 
 ##  Quick Start
