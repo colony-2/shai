@@ -228,7 +228,7 @@ resources:
     ports:
       - host: github.com
         port: 22
-      - host: example.com
+      - host: github.com
         port: 443
 apply:
   - path: ./
@@ -458,8 +458,8 @@ apply:
 		ShowProgress:  false,
 		Stdout:        &output,
 		PostSetupExec: &ExecSpec{
-			// Add marker to easily find owner in output
-			Command: []string{"sh", "-c", "echo 'OWNER_IS:' && stat -c '%U' /src"},
+			// Check ownership by UID (more reliable than username lookup)
+			Command: []string{"sh", "-c", "echo 'UID_IS:' && stat -c '%u' /src"},
 			UseTTY:  false,
 		},
 	}
@@ -473,16 +473,16 @@ apply:
 	err = runner.Run(ctx)
 	require.NoError(t, err)
 
-	// Extract the line after OWNER_IS:
+	// Extract the line after UID_IS:
 	lines := strings.Split(output.String(), "\n")
-	var owner string
+	var uid string
 	for i, line := range lines {
-		if strings.Contains(line, "OWNER_IS:") && i+1 < len(lines) {
-			owner = strings.TrimSpace(lines[i+1])
+		if strings.Contains(line, "UID_IS:") && i+1 < len(lines) {
+			uid = strings.TrimSpace(lines[i+1])
 			break
 		}
 	}
-	assert.Equal(t, "shai", owner, "Workspace should be owned by shai user")
+	assert.Equal(t, "4747", uid, "Workspace should be owned by shai user (UID 4747)")
 }
 
 // Test #26: Root commands execute before user switch
