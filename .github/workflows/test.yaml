@@ -17,7 +17,7 @@ jobs:
           - os: ubuntu-latest
             arch: amd64
           # Linux ARM64
-          - os: ubuntu-latest-arm
+          - os: ubuntu-22.04-arm
             arch: arm64
           # macOS Intel
           - os: macos-13
@@ -26,10 +26,10 @@ jobs:
           - os: macos-latest
             arch: arm64
           # Windows AMD64
-          - os: windows-latest
+          - os: windows-2025
             arch: amd64
           # Windows ARM64
-          - os: windows-latest-arm
+          - os: windows-11-arm
             arch: arm64
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -42,16 +42,37 @@ jobs:
         with:
           go-version: '1.24.1'
 
+      - name: Set up Docker on Windows (WSL2)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Installing WSL and Docker on Windows..."
+          wsl --install -d Ubuntu-24.04 --no-launch
+          wsl --set-default-version 2
+
+          # Install Docker in WSL
+          wsl -d Ubuntu-24.04 -e bash -c "sudo apt-get update && sudo apt-get install -y docker.io && sudo service docker start"
+
+          Write-Host "Docker setup complete"
+
       - name: Set up Docker Buildx (Linux/macOS only)
         if: runner.os != 'Windows'
         uses: docker/setup-buildx-action@v3
 
-      - name: Pull Docker test image (Linux/macOS only)
+      - name: Pull Docker test image (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           echo "Pulling Docker image for integration tests..."
           docker pull ghcr.io/colony-2/shai-mega || echo "Warning: Failed to pull image, tests will attempt to pull it themselves"
           echo "Image pull complete"
+
+      - name: Pull Docker test image (Windows/WSL2)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Pulling Docker image for integration tests..."
+          wsl -d Ubuntu-24.04 -e bash -c "sudo docker pull ghcr.io/colony-2/shai-mega || echo 'Warning: Failed to pull image, tests will attempt to pull it themselves'"
+          Write-Host "Image pull complete"
 
       - name: Run tests
         run: |
