@@ -15,23 +15,15 @@ jobs:
         include:
           # Linux AMD64
           - os: ubuntu-latest
-            arch: amd64
           # Linux ARM64
           - os: ubuntu-22.04-arm
-            arch: arm64
           # macOS Intel
-          - os: macos-15 #requried for the plugin to work.
-            arch: amd64
+          - os: macos-15-intel #requried for the plugin to work.
           # macOS ARM (Apple Silicon) - Not supported: M1/M2/M3 processors lack nested virtualization support
           # needed for Docker via Colima. See: https://github.com/douglascamata/setup-docker-macos-action
           # - os: macos-latest
-          #   arch: arm64
           # Windows AMD64
           - os: windows-2025
-            arch: amd64
-          # Windows ARM64
-          - os: windows-11-arm
-            arch: arm64
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
