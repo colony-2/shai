@@ -10,7 +10,25 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux AMD64
+          - os: ubuntu-latest
+          # Linux ARM64
+          - os: ubuntu-22.04-arm
+          # macOS Intel
+          - os: macos-15-intel #requried for the plugin to work.
+
+          # Disabled until github supports nested virutalization on m3/m4+
+          # needed for Docker via Colima. See: https://github.com/douglascamata/setup-docker-macos-action
+          # - os: macos-latest
+
+          # Windows AMD64
+          # Disabled until we fix shai to work on Windows
+          # - os: windows-2025
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,18 +38,67 @@ jobs:
         with:
           go-version: '1.24.1'
 
-      - name: Set up Docker Buildx
+      - name: Set up Docker on macOS (Colima)
+        if: runner.os == 'macOS'
+        uses: douglascamata/setup-docker-macos-action@v1.0.2
+
+      - name: Create Docker socket symlink (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "Creating symlink for Docker socket..."
+          sudo mkdir -p /var/run
+          sudo ln -sf $HOME/.colima/default/docker.sock /var/run/docker.sock
+          ls -la /var/run/docker.sock
+          echo "Docker socket symlink created"
+
+      - name: Set up Docker on Windows (WSL2)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Installing WSL and Docker on Windows..."
+          wsl --install -d Ubuntu-24.04 --no-launch
+          wsl --set-default-version 2
+
+          # Install Docker in WSL
+          wsl -d Ubuntu-24.04 -e bash -c "sudo apt-get update && sudo apt-get install -y docker.io && sudo service docker start"
+
+          Write-Host "Docker setup complete"
+
+      - name: Set up Docker Buildx (Linux only)
+        if: runner.os == 'Linux'
         uses: docker/setup-buildx-action@v3
 
-      - name: Pull Docker test image
+      - name: Pull Docker test image (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           echo "Pulling Docker image for integration tests..."
-          docker pull ghcr.io/colony-2/shai-mega || echo "Warning: Failed to pull image, tests will attempt to pull it themselves"
+          docker pull ghcr.io/colony-2/shai-base || echo "Warning: Failed to pull image, tests will attempt to pull it themselves"
           echo "Image pull complete"
 
-      - name: Run tests
+      - name: Pull Docker test image (Windows/WSL2)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "Pulling Docker image for integration tests..."
+          wsl -d Ubuntu-24.04 -e bash -c "sudo docker pull ghcr.io/colony-2/shai-base || echo 'Warning: Failed to pull image, tests will attempt to pull it themselves'"
+          Write-Host "Image pull complete"
+
+      - name: Run tests (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p $HOME
+          mkdir -p ${{ github.workspace }}/.test-tmp
           go test -v -tags=integration ./...
         env:
           HOME: ${{ github.workspace }}/.test-home
+          TMPDIR: ${{ github.workspace }}/.test-tmp
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $testHome = "${{ github.workspace }}\.test-home"
+          New-Item -ItemType Directory -Force -Path $testHome | Out-Null
+          go test -v -tags=integration ./...
+        env:
+          HOME: ${{ github.workspace }}\.test-home
