@@ -37,7 +37,7 @@ jobs:
 
       - name: Set up Docker on macOS (Colima)
         if: runner.os == 'macOS'
-        uses: douglascamata/setup-docker-macos-action@v1.0.1
+        uses: douglascamata/setup-docker-macos-action@v1.0.2
 
       - name: Set up Docker on Windows (WSL2)
         if: runner.os == 'Windows'
