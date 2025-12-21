@@ -19,11 +19,14 @@ jobs:
           - os: ubuntu-22.04-arm
           # macOS Intel
           - os: macos-15-intel #requried for the plugin to work.
-          # macOS ARM (Apple Silicon) - Not supported: M1/M2/M3 processors lack nested virtualization support
+
+          # Disabled until github supports nested virutalization on m3/m4+
           # needed for Docker via Colima. See: https://github.com/douglascamata/setup-docker-macos-action
           # - os: macos-latest
+
           # Windows AMD64
-          - os: windows-2025
+          # Disabled until we fix shai to work on Windows
+          # - os: windows-2025
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -60,7 +63,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           echo "Pulling Docker image for integration tests..."
-          docker pull ghcr.io/colony-2/shai-mega || echo "Warning: Failed to pull image, tests will attempt to pull it themselves"
+          docker pull ghcr.io/colony-2/shai-base || echo "Warning: Failed to pull image, tests will attempt to pull it themselves"
           echo "Image pull complete"
 
       - name: Pull Docker test image (Windows/WSL2)
@@ -68,7 +71,7 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Pulling Docker image for integration tests..."
-          wsl -d Ubuntu-24.04 -e bash -c "sudo docker pull ghcr.io/colony-2/shai-mega || echo 'Warning: Failed to pull image, tests will attempt to pull it themselves'"
+          wsl -d Ubuntu-24.04 -e bash -c "sudo docker pull ghcr.io/colony-2/shai-base || echo 'Warning: Failed to pull image, tests will attempt to pull it themselves'"
           Write-Host "Image pull complete"
 
       - name: Run tests (Unix)
