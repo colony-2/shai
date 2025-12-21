@@ -79,9 +79,20 @@ jobs:
           wsl -d Ubuntu-24.04 -e bash -c "sudo docker pull ghcr.io/colony-2/shai-mega || echo 'Warning: Failed to pull image, tests will attempt to pull it themselves'"
           Write-Host "Image pull complete"
 
-      - name: Run tests
+      - name: Run tests (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p $HOME
           go test -v -tags=integration ./...
         env:
           HOME: ${{ github.workspace }}/.test-home
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $testHome = "${{ github.workspace }}\.test-home"
+          New-Item -ItemType Directory -Force -Path $testHome | Out-Null
+          go test -v -tags=integration ./...
+        env:
+          HOME: ${{ github.workspace }}\.test-home
