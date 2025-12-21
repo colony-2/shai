@@ -42,6 +42,15 @@ jobs:
         if: runner.os == 'macOS'
         uses: douglascamata/setup-docker-macos-action@v1.0.2
 
+      - name: Create Docker socket symlink (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "Creating symlink for Docker socket..."
+          sudo mkdir -p /var/run
+          sudo ln -sf $HOME/.colima/default/docker.sock /var/run/docker.sock
+          ls -la /var/run/docker.sock
+          echo "Docker socket symlink created"
+
       - name: Set up Docker on Windows (WSL2)
         if: runner.os == 'Windows'
         shell: pwsh
