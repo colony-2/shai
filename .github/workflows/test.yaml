@@ -87,9 +87,11 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p $HOME
+          mkdir -p ${{ github.workspace }}/.test-tmp
           go test -v -tags=integration ./...
         env:
           HOME: ${{ github.workspace }}/.test-home
+          TMPDIR: ${{ github.workspace }}/.test-tmp
 
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
