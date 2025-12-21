@@ -20,7 +20,7 @@ jobs:
           - os: ubuntu-22.04-arm
             arch: arm64
           # macOS Intel
-          - os: macos-13
+          - os: macos-15 #requried for the plugin to work.
             arch: amd64
           # macOS ARM (Apple Silicon) - Not supported: M1/M2/M3 processors lack nested virtualization support
           # needed for Docker via Colima. See: https://github.com/douglascamata/setup-docker-macos-action
