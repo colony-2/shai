@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/signal"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -19,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/colony-2/shai/internal/shai/runtime/alias"
@@ -793,43 +791,6 @@ func (d *execStartDetector) Write(p []byte) (int, error) {
 
 func (d *execStartDetector) Close() error {
 	return nil
-}
-
-func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr, containerID string) func() {
-	if !term.IsTerminal(fd) {
-		return nil
-	}
-	resize := func() {
-		if ws, err := term.GetWinsize(fd); err == nil && ws != nil {
-			_ = r.docker.ContainerResize(context.Background(), containerID, container.ResizeOptions{
-				Height: uint(ws.Height),
-				Width:  uint(ws.Width),
-			})
-		}
-	}
-	resize()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGWINCH)
-
-	done := make(chan struct{})
-	go func() {
-		defer signal.Stop(sigCh)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			case <-sigCh:
-				resize()
-			}
-		}
-	}()
-
-	return func() {
-		close(done)
-	}
 }
 
 func orderedKeyValuePairs(values map[string]string) []string {
