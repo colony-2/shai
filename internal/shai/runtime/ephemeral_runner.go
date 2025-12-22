@@ -151,11 +151,6 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 
 	mcpBindAddr := getMCPServerBindAddr(context.Background(), dockerClient)
 	dockerHostAddr := getDockerHostAddress()
-	if host, _, err := net.SplitHostPort(mcpBindAddr); err == nil {
-		if strings.TrimSpace(host) != "" && host != "0.0.0.0" {
-			dockerHostAddr = host
-		}
-	}
 	aliasSvc, err := alias.MaybeStart(alias.Config{
 		WorkingDir:     cfg.WorkingDir,
 		ShellPath:      os.Getenv("SHELL"),
