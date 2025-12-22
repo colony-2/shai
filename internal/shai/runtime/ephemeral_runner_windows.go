@@ -4,16 +4,29 @@ package shai
 
 import (
 	"context"
-	"time"
+	"syscall"
+	"unsafe"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/moby/term"
-	"golang.org/x/sys/windows"
+)
+
+var (
+	kernel32                       = syscall.NewLazyDLL("kernel32.dll")
+	procReadConsoleInput           = kernel32.NewProc("ReadConsoleInputW")
+	procGetNumberOfConsoleInputEvents = kernel32.NewProc("GetNumberOfConsoleInputEvents")
 )
 
 const (
 	_WINDOW_BUFFER_SIZE_EVENT = 0x0004
 )
+
+// INPUT_RECORD structure from Windows Console API
+type inputRecord struct {
+	EventType uint16
+	_         uint16 // padding
+	Event     [16]byte
+}
 
 func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr, containerID string) func() {
 	if !term.IsTerminal(fd) {
@@ -32,9 +45,6 @@ func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr,
 	// Do initial resize
 	resize()
 
-	// Get the console input handle
-	handle := windows.Handle(fd)
-
 	done := make(chan struct{})
 	go func() {
 		defer func() {
@@ -42,12 +52,9 @@ func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr,
 			recover()
 		}()
 
-		// Buffer for reading console input events
-		var inputRecords [1]windows.InputRecord
+		handle := syscall.Handle(fd)
+		var inputRecords [128]inputRecord
 		var numRead uint32
-
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
 
 		for {
 			select {
@@ -55,24 +62,50 @@ func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr,
 				return
 			case <-done:
 				return
-			case <-ticker.C:
-				// Check if there are any console events available
-				var numEvents uint32
-				err := windows.GetNumberOfConsoleInputEvents(handle, &numEvents)
-				if err != nil || numEvents == 0 {
-					continue
-				}
+			default:
+			}
 
-				// Read console input events
-				err = windows.ReadConsoleInput(handle, &inputRecords[0], 1, &numRead)
-				if err != nil || numRead == 0 {
-					continue
+			// Check if there are console input events
+			var numEvents uint32
+			ret, _, _ := procGetNumberOfConsoleInputEvents.Call(
+				uintptr(handle),
+				uintptr(unsafe.Pointer(&numEvents)),
+			)
+			if ret == 0 || numEvents == 0 {
+				// Sleep briefly to avoid busy loop
+				select {
+				case <-ctx.Done():
+					return
+				case <-done:
+					return
+				case <-func() <-chan struct{} {
+					ch := make(chan struct{})
+					go func() {
+						syscall.Sleep(50) // 50ms
+						close(ch)
+					}()
+					return ch
+				}():
 				}
+				continue
+			}
 
-				// Check if it's a window buffer size event
-				event := inputRecords[0]
-				if event.EventType == _WINDOW_BUFFER_SIZE_EVENT {
+			// Read console input events
+			ret, _, _ = procReadConsoleInput.Call(
+				uintptr(handle),
+				uintptr(unsafe.Pointer(&inputRecords[0])),
+				uintptr(len(inputRecords)),
+				uintptr(unsafe.Pointer(&numRead)),
+			)
+			if ret == 0 || numRead == 0 {
+				continue
+			}
+
+			// Check for window buffer size events
+			for i := uint32(0); i < numRead; i++ {
+				if inputRecords[i].EventType == _WINDOW_BUFFER_SIZE_EVENT {
 					resize()
+					break
 				}
 			}
 		}
