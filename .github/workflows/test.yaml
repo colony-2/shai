@@ -102,3 +102,11 @@ jobs:
           go test -v -tags=integration ./...
         env:
           HOME: ${{ github.workspace }}\.test-home
+
+  # Summary job that depends on all matrix jobs completing
+  test-summary:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: All tests passed
+        run: echo "All test matrix jobs completed successfully"
