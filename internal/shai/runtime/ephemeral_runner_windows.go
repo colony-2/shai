@@ -5,6 +5,7 @@ package shai
 import (
 	"context"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/docker/docker/api/types/container"
@@ -73,20 +74,7 @@ func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr,
 			)
 			if ret == 0 || numEvents == 0 {
 				// Sleep briefly to avoid busy loop
-				select {
-				case <-ctx.Done():
-					return
-				case <-done:
-					return
-				case <-func() <-chan struct{} {
-					ch := make(chan struct{})
-					go func() {
-						syscall.Sleep(50) // 50ms
-						close(ch)
-					}()
-					return ch
-				}():
-				}
+				time.Sleep(50 * time.Millisecond)
 				continue
 			}
 
