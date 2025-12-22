@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"os/signal"
 	"os/user"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,6 +49,8 @@ type EphemeralConfig struct {
 	GracefulStopTimeout time.Duration
 	ImageOverride       string
 	UserOverride        string
+	HostUID             string
+	HostGID             string
 	Privileged          bool
 	ShowProgress        bool
 }
@@ -74,6 +76,8 @@ type EphemeralRunner struct {
 	aliasSvc           *alias.Service
 	currentContainerID string
 	hostEnv            map[string]string
+	hostUID            string
+	hostGID            string
 	bootstrapDir       string
 	bootstrapMount     string
 	dockerHostAddr     string
@@ -104,6 +108,15 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 	}
 
 	hostEnv := hostEnvMap()
+	if strings.TrimSpace(cfg.HostUID) == "" || strings.TrimSpace(cfg.HostGID) == "" {
+		uid, gid := hostUserIDs()
+		if strings.TrimSpace(cfg.HostUID) == "" {
+			cfg.HostUID = uid
+		}
+		if strings.TrimSpace(cfg.HostGID) == "" {
+			cfg.HostGID = gid
+		}
+	}
 	configPath := cfg.ConfigFile
 	if configPath == "" {
 		configPath = filepath.Join(cfg.WorkingDir, DefaultConfigRelPath)
@@ -135,8 +148,13 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 		return nil, fmt.Errorf("failed to resolve calls: %w", err)
 	}
 
-	dockerHostAddr := getDockerHostAddress()
 	mcpBindAddr := getMCPServerBindAddr(context.Background(), dockerClient)
+	dockerHostAddr := getDockerHostAddress()
+	if host, _, err := net.SplitHostPort(mcpBindAddr); err == nil {
+		if strings.TrimSpace(host) != "" && host != "0.0.0.0" {
+			dockerHostAddr = host
+		}
+	}
 	aliasSvc, err := alias.MaybeStart(alias.Config{
 		WorkingDir:     cfg.WorkingDir,
 		ShellPath:      os.Getenv("SHELL"),
@@ -170,6 +188,8 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 		mountBuilder:   mountBuilder,
 		aliasSvc:       aliasSvc,
 		hostEnv:        hostEnv,
+		hostUID:        cfg.HostUID,
+		hostGID:        cfg.HostGID,
 		dockerHostAddr: dockerHostAddr,
 	}
 	if cfg.Verbose {
@@ -434,6 +454,12 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) 
 	}
 	if r.aliasSvc != nil {
 		env = append(env, r.aliasSvc.Env()...)
+	}
+	if strings.TrimSpace(r.hostUID) != "" {
+		env = append(env, fmt.Sprintf("DEV_UID=%s", strings.TrimSpace(r.hostUID)))
+	}
+	if strings.TrimSpace(r.hostGID) != "" {
+		env = append(env, fmt.Sprintf("DEV_GID=%s", strings.TrimSpace(r.hostGID)))
 	}
 
 	cfg := &container.Config{

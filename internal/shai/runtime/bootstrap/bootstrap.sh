@@ -205,6 +205,7 @@ IMAGE_NAME=""
 PROXY_PORT=${PROXY_PORT:-18888}
 DNS_PORT=${DNS_PORT:-1053}
 REQUESTED_DEV_UID=${DEV_UID:-4747}
+REQUESTED_DEV_GID=${DEV_GID:-$REQUESTED_DEV_UID}
 RM_SELF="false"
 
 declare -a EXEC_ENVS=()
@@ -412,15 +413,8 @@ files = /etc/supervisor/conf.d/*.conf
 SUPERVISOR_CONF
 }
 
-dev_egress_setup() {
-  local dev_uid=$1
-  local proxy_port=$2
-  local dns_port=$3
-  shift 3
-  local port_allow_list=("$@")
-
+compute_docker_host_name() {
   local docker_host_name=${DOCKER_HOST_NAME:-}
-  local allow_docker_host_port=${ALLOW_DOCKER_HOST_PORT:-}
 
   if [ -z "$docker_host_name" ] && [ -n "${SHAI_ALIAS_ENDPOINT:-}" ]; then
     local endpoint=${SHAI_ALIAS_ENDPOINT#*://}
@@ -430,7 +424,21 @@ dev_egress_setup() {
     host_part=${host_part%]}
     docker_host_name=${host_part:-host.docker.internal}
   fi
+
   docker_host_name=${docker_host_name:-host.docker.internal}
+  printf '%s\n' "$docker_host_name"
+}
+
+dev_egress_setup() {
+  local dev_uid=$1
+  local proxy_port=$2
+  local dns_port=$3
+  shift 3
+  local port_allow_list=("$@")
+
+  local docker_host_name
+  docker_host_name=$(compute_docker_host_name)
+  local allow_docker_host_port=${ALLOW_DOCKER_HOST_PORT:-}
 
   if [ -n "$allow_docker_host_port" ]; then
     local alias_entry="${docker_host_name}:${allow_docker_host_port}"
@@ -481,6 +489,13 @@ dev_egress_setup() {
   }
 
   if command -v iptables >/dev/null 2>&1; then
+    local docker_host_ip
+    docker_host_ip=$(resolve_host_ip "$docker_host_name")
+    if [ -n "$docker_host_ip" ]; then
+      ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -p tcp -d "$docker_host_ip" -j ACCEPT
+      ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -p udp -d "$docker_host_ip" -j ACCEPT
+    fi
+
     ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -o lo -j ACCEPT
     ensure_rule filter OUTPUT -m owner --uid-owner "$dev_uid" -p tcp -d 127.0.0.1 --dport "$proxy_port" -j ACCEPT
     # Force all DNS requests through the local dnsmasq instance.
@@ -532,7 +547,6 @@ dev_egress_setup() {
     fi
   fi
 
-  # Log iptables rules to file for non-root users to reference
   local log_dir="/var/log/shai"
   local log_file="$log_dir/iptables.out"
   mkdir -p "$log_dir" 2>/dev/null || true
@@ -557,121 +571,264 @@ dev_egress_setup() {
     if command -v ip6tables >/dev/null 2>&1; then
       ip6tables -t nat -S OUTPUT 2>/dev/null || echo "# Failed to dump IPv6 nat rules"
     fi
-  } > "$log_file" 2>/dev/null || true
+  } >"$log_file" 2>/dev/null || true
   chmod 644 "$log_file" 2>/dev/null || true
   log_verbose "iptables rules logged to $log_file"
 }
-ensure_user() {
-  local user=$1
-  if id "$user" >/dev/null 2>&1; then
-    return
-  fi
-  local args=()
-  local home_dir="/home/$user"
-
-  # Check if home directory already exists (e.g., from volume mount)
-  if [ -d "$home_dir" ]; then
-    # Don't create home directory, it already exists
-    args+=(-M)
-    debug "creating user $user (home directory already exists)"
-  else
-    # Create home directory normally
-    args+=(-m)
-    debug "creating user $user with new home directory"
-  fi
-
-  if [ -n "$REQUESTED_DEV_UID" ]; then
-    args+=(-u "$REQUESTED_DEV_UID")
-  fi
-
-  useradd "${args[@]}" -d "$home_dir" -s /bin/bash "$user"
-
-  # If home directory existed, ensure proper ownership
-  if [ -d "$home_dir" ]; then
-    chown -R "$user:$user" "$home_dir" 2>/dev/null || true
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    die "required command $1 not found"
   fi
 }
 
-IS_ROOT=1
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  IS_ROOT=0
-  debug "running without root privileges; skipping privileged setup"
-fi
-
-if [ "$IS_ROOT" -eq 1 ]; then
-  ensure_user "$TARGET_USER"
-else
-  if ! id "$TARGET_USER" >/dev/null 2>&1; then
-    die "user $TARGET_USER does not exist and bootstrap cannot create it without root"
+user_by_uid() {
+  local uid=$1
+  if [ -z "$uid" ]; then
+    return
   fi
-fi
+  getent passwd | awk -F: -v uid="$uid" '$3==uid {print $1; exit}'
+}
 
-DEV_UID=$(id -u "$TARGET_USER")
-DEV_GID=$(id -g "$TARGET_USER")
-export DEV_UID DEV_GID
+group_by_gid() {
+  local gid=$1
+  if [ -z "$gid" ]; then
+    return
+  fi
+  getent group | awk -F: -v gid="$gid" '$3==gid {print $1; exit}'
+}
 
-log_verbose "bootstrap start (uid=${EUID:-$(id -u)}, dev_uid=$DEV_UID, proxy_port=$PROXY_PORT)"
+ensure_group_with_gid() {
+  local gid=$1
+  local preferred=$2
+  if [ -z "$gid" ]; then
+    return
+  fi
 
-mkdir -p "$(dirname "$ALLOWLIST_FILE")"
-if [ ${#HTTP_ALLOW[@]} -gt 0 ]; then
-  printf '%s\n' "${HTTP_ALLOW[@]}" >"$ALLOWLIST_FILE"
-  debug "updated tinyproxy allowlist with ${#HTTP_ALLOW[@]} entries"
-else
-  : >"$ALLOWLIST_FILE"
-  debug "tinyproxy allowlist empty; http proxy will deny all outbound traffic"
-fi
-generate_dnsmasq_allowlist "$ALLOWLIST_FILE" "$DNS_ALLOW_FILE"
+  local existing
+  existing=$(group_by_gid "$gid")
+  if [ -n "$existing" ]; then
+    printf '%s\n' "$existing"
+    return
+  fi
 
-if [ "$IS_ROOT" -eq 1 ]; then
-  debug "ensuring log directories"
-  mkdir -p "$SHAI_LOG_DIR" "$TINYPROXY_LOG_DIR" "$DNSMASQ_LOG_DIR"
-  mkdir -p /etc/supervisor/conf.d
-  chown tinyproxy:tinyproxy "$TINYPROXY_LOG_DIR" "$TINYPROXY_RUN_DIR" 2>/dev/null || true
+  require_cmd groupadd
 
-  SUP_PIDFILE=$SUPERVISOR_PID
-  if ! [ -f "$SUP_PIDFILE" ] || ! kill -0 "$(cat "$SUP_PIDFILE" 2>/dev/null)" 2>/dev/null; then
-    log_verbose "starting supervisord"
-    if start_supervisord; then
-      debug "supervisord started"
+  local name=$preferred
+  if [ -z "$name" ]; then
+    name="shai"
+  fi
+  if getent group "$name" >/dev/null 2>&1; then
+    name="shai-${gid}"
+  fi
+
+  if groupadd -g "$gid" "$name"; then
+    printf '%s\n' "$name"
+    return
+  fi
+
+  die "failed to create group with gid $gid"
+}
+
+reconcile_target_user() {
+  local requested_uid=$REQUESTED_DEV_UID
+  local requested_gid=$REQUESTED_DEV_GID
+  local uid_user=""
+  local gid_group=""
+
+  if [ -n "$requested_uid" ]; then
+    uid_user=$(user_by_uid "$requested_uid")
+  fi
+  if [ -n "$requested_gid" ]; then
+    gid_group=$(group_by_gid "$requested_gid")
+  fi
+
+  if [ "$IS_ROOT" -ne 1 ]; then
+    if ! id "$TARGET_USER" >/dev/null 2>&1; then
+      die "user $TARGET_USER does not exist and bootstrap cannot create it without root"
+    fi
+    DEV_UID=$(id -u "$TARGET_USER")
+    DEV_GID=$(id -g "$TARGET_USER")
+    if [ -n "$requested_uid" ] && [ "$DEV_UID" != "$requested_uid" ]; then
+      die "user $TARGET_USER has uid $DEV_UID but host uid $requested_uid; rerun with root"
+    fi
+    if [ -n "$requested_gid" ] && [ "$DEV_GID" != "$requested_gid" ]; then
+      die "user $TARGET_USER has gid $DEV_GID but host gid $requested_gid; rerun with root"
+    fi
+    return
+  fi
+
+  if [ -n "$requested_uid" ] && [ -z "$uid_user" ]; then
+    log_verbose "no existing account with uid $requested_uid; will align $TARGET_USER to host uid"
+  fi
+
+  if ! id "$TARGET_USER" >/dev/null 2>&1; then
+    if [ -n "$uid_user" ]; then
+      log_verbose "reusing existing user $uid_user with uid $requested_uid"
+      TARGET_USER="$uid_user"
     else
-      status=$?
-      die "supervisord launch exited with status $status"
+      require_cmd useradd
+      local home_dir="/home/$TARGET_USER"
+      local args=()
+      if [ -d "$home_dir" ]; then
+        args+=(-M)
+      else
+        args+=(-m)
+      fi
+      if [ -n "$requested_uid" ]; then
+        args+=(-u "$requested_uid")
+      fi
+      local primary_group=""
+      if [ -n "$requested_gid" ]; then
+        primary_group=$(ensure_group_with_gid "$requested_gid" "$TARGET_USER")
+      fi
+      if [ -n "$primary_group" ]; then
+        args+=(-g "$primary_group")
+      fi
+      args+=(-d "$home_dir" -s /bin/bash)
+      if ! useradd "${args[@]}" "$TARGET_USER"; then
+        die "failed to create user $TARGET_USER"
+      fi
+      if [ -d "$home_dir" ]; then
+        chown -R "$TARGET_USER:$TARGET_USER" "$home_dir" 2>/dev/null || true
+      fi
     fi
   else
-    debug "supervisord already running (pid $(cat "$SUP_PIDFILE" 2>/dev/null))"
+    local current_uid
+    current_uid=$(id -u "$TARGET_USER")
+    if [ -n "$requested_uid" ] && [ "$current_uid" != "$requested_uid" ]; then
+      if [ -n "$uid_user" ] && [ "$uid_user" != "$TARGET_USER" ]; then
+        log_verbose "target user $TARGET_USER uses uid $current_uid; switching to existing uid-matched user $uid_user"
+        TARGET_USER="$uid_user"
+      else
+        require_cmd usermod
+        if ! usermod -u "$requested_uid" "$TARGET_USER"; then
+          die "failed to update uid for $TARGET_USER to $requested_uid"
+        fi
+      fi
+    fi
   fi
-fi
 
-if [ ${#PORT_ALLOW[@]} -gt 0 ]; then
-  dev_egress_setup "$DEV_UID" "$PROXY_PORT" "$DNS_PORT" "${PORT_ALLOW[@]}"
-else
-  dev_egress_setup "$DEV_UID" "$PROXY_PORT" "$DNS_PORT"
-fi
+  DEV_UID=$(id -u "$TARGET_USER")
+  DEV_GID=$(id -g "$TARGET_USER")
 
-if [ ! -d "$WORKSPACE" ]; then
-  debug "workspace $WORKSPACE does not exist; attempting to create"
-  mkdir -p "$WORKSPACE" 2>/dev/null || true
-fi
+  if [ -n "$requested_gid" ] && [ "$DEV_GID" != "$requested_gid" ]; then
+    local target_group=$gid_group
+    if [ -z "$target_group" ]; then
+      target_group=$(ensure_group_with_gid "$requested_gid" "$TARGET_USER")
+    fi
+    if [ -z "$target_group" ]; then
+      die "unable to resolve group for gid $requested_gid"
+    fi
+    require_cmd usermod
+    if ! usermod -g "$target_group" "$TARGET_USER"; then
+      die "failed to update primary group for $TARGET_USER to gid $requested_gid"
+    fi
+    DEV_GID=$(id -g "$TARGET_USER")
+  fi
 
-user_entry=$(getent passwd "$TARGET_USER" || true)
-if [ -z "$user_entry" ]; then
-  die "user $TARGET_USER not found in passwd database"
-fi
-user_home=$(printf '%s\n' "$user_entry" | cut -d: -f6)
-user_shell=$(printf '%s\n' "$user_entry" | cut -d: -f7)
-if [ -z "$user_shell" ]; then
-  user_shell="/bin/bash"
-fi
+  export TARGET_USER
+  export DEV_UID DEV_GID
+}
 
-export HOME="$user_home"
-export USER="$TARGET_USER"
-export WORKSPACE="$WORKSPACE"
-export SHAI_WORKSPACE="$WORKSPACE"
+main() {
+  IS_ROOT=1
+  if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+    IS_ROOT=0
+    debug "running without root privileges; skipping privileged setup"
+  fi
 
-proxy_url="http://127.0.0.1:${PROXY_PORT}"
-no_proxy="localhost,127.0.0.1,::1"
+  reconcile_target_user
 
-cat >"$PROXY_ENV_FILE" <<EOF
+  log_verbose "bootstrap start (uid=${EUID:-$(id -u)}, dev_uid=$DEV_UID, dev_gid=$DEV_GID, proxy_port=$PROXY_PORT)"
+
+  local docker_host_name
+  docker_host_name=$(compute_docker_host_name)
+
+  local allow_hosts=()
+  if [ ${#HTTP_ALLOW[@]} -gt 0 ]; then
+    allow_hosts=("${HTTP_ALLOW[@]}")
+  fi
+  for entry in "${PORT_ALLOW[@]}"; do
+    local host=${entry%%:*}
+    [ -n "$host" ] && allow_hosts+=("$host")
+  done
+  if [ -n "${ALLOW_DOCKER_HOST_PORT:-}" ]; then
+    allow_hosts+=("$docker_host_name")
+  fi
+  if [ ${#allow_hosts[@]} -gt 0 ]; then
+    # de-duplicate
+    local uniq_hosts=()
+    declare -A seen_hosts=()
+    for h in "${allow_hosts[@]}"; do
+      [ -z "$h" ] && continue
+      if [ -z "${seen_hosts[$h]:-}" ]; then
+        uniq_hosts+=("$h")
+        seen_hosts[$h]=1
+      fi
+    done
+    allow_hosts=("${uniq_hosts[@]}")
+  fi
+
+  mkdir -p "$(dirname "$ALLOWLIST_FILE")"
+  if [ ${#allow_hosts[@]} -gt 0 ]; then
+    printf '%s\n' "${allow_hosts[@]}" >"$ALLOWLIST_FILE"
+    debug "updated tinyproxy allowlist with ${#allow_hosts[@]} entries"
+  else
+    : >"$ALLOWLIST_FILE"
+    debug "tinyproxy allowlist empty; http proxy will deny all outbound traffic"
+  fi
+  generate_dnsmasq_allowlist "$ALLOWLIST_FILE" "$DNS_ALLOW_FILE"
+
+  if [ "$IS_ROOT" -eq 1 ]; then
+    debug "ensuring log directories"
+    mkdir -p "$SHAI_LOG_DIR" "$TINYPROXY_LOG_DIR" "$DNSMASQ_LOG_DIR"
+    mkdir -p /etc/supervisor/conf.d
+    chown tinyproxy:tinyproxy "$TINYPROXY_LOG_DIR" "$TINYPROXY_RUN_DIR" 2>/dev/null || true
+
+    SUP_PIDFILE=$SUPERVISOR_PID
+    if ! [ -f "$SUP_PIDFILE" ] || ! kill -0 "$(cat "$SUP_PIDFILE" 2>/dev/null)" 2>/dev/null; then
+      log_verbose "starting supervisord"
+      if start_supervisord; then
+        debug "supervisord started"
+      else
+        status=$?
+        die "supervisord launch exited with status $status"
+      fi
+    else
+      debug "supervisord already running (pid $(cat "$SUP_PIDFILE" 2>/dev/null))"
+    fi
+  fi
+
+  if [ ${#PORT_ALLOW[@]} -gt 0 ]; then
+    dev_egress_setup "$DEV_UID" "$PROXY_PORT" "$DNS_PORT" "${PORT_ALLOW[@]}"
+  else
+    dev_egress_setup "$DEV_UID" "$PROXY_PORT" "$DNS_PORT"
+  fi
+
+  if [ ! -d "$WORKSPACE" ]; then
+    debug "workspace $WORKSPACE does not exist; attempting to create"
+    mkdir -p "$WORKSPACE" 2>/dev/null || true
+  fi
+
+  user_entry=$(getent passwd "$TARGET_USER" || true)
+  if [ -z "$user_entry" ]; then
+    die "user $TARGET_USER not found in passwd database"
+  fi
+  user_home=$(printf '%s\n' "$user_entry" | cut -d: -f6)
+  user_shell=$(printf '%s\n' "$user_entry" | cut -d: -f7)
+  if [ -z "$user_shell" ]; then
+    user_shell="/bin/bash"
+  fi
+
+  export HOME="$user_home"
+  export USER="$TARGET_USER"
+  export WORKSPACE="$WORKSPACE"
+  export SHAI_WORKSPACE="$WORKSPACE"
+
+  proxy_url="http://127.0.0.1:${PROXY_PORT}"
+  no_proxy="localhost,127.0.0.1,::1"
+
+  cat >"$PROXY_ENV_FILE" <<EOF
 export HTTP_PROXY="$proxy_url"
 export HTTPS_PROXY="$proxy_url"
 export http_proxy="$proxy_url"
@@ -679,94 +836,103 @@ export https_proxy="$proxy_url"
 export NO_PROXY="$no_proxy"
 export no_proxy="$no_proxy"
 EOF
-chmod 0644 "$PROXY_ENV_FILE"
+  chmod 0644 "$PROXY_ENV_FILE"
 
-export HTTP_PROXY="$proxy_url"
-export HTTPS_PROXY="$proxy_url"
-export http_proxy="$proxy_url"
-export https_proxy="$proxy_url"
-export NO_PROXY="$no_proxy"
-export no_proxy="$no_proxy"
-export BASH_ENV="$PROXY_ENV_FILE"
-export ENV="$PROXY_ENV_FILE"
+  export HTTP_PROXY="$proxy_url"
+  export HTTPS_PROXY="$proxy_url"
+  export http_proxy="$proxy_url"
+  export https_proxy="$proxy_url"
+  if [ -n "$docker_host_name" ]; then
+    if ! printf '%s' "$no_proxy" | tr ',' '\n' | grep -qxF "$docker_host_name"; then
+      no_proxy="$no_proxy,$docker_host_name"
+    fi
+    if host_ip=$(getent hosts "$docker_host_name" 2>/dev/null | awk '{print $1; exit}'); then
+      if ! printf '%s' "$no_proxy" | tr ',' '\n' | grep -qxF "$host_ip"; then
+        no_proxy="$no_proxy,$host_ip"
+      fi
+    fi
+  fi
+  export NO_PROXY="$no_proxy"
+  export no_proxy="$no_proxy"
+  export BASH_ENV="$PROXY_ENV_FILE"
+  export ENV="$PROXY_ENV_FILE"
 
-if [ "$IS_ROOT" -eq 1 ]; then
-  mkdir -p "$(dirname "$PROFILE_SNIPPET")"
-  cat >"$PROFILE_SNIPPET" <<EOF
+  if [ "$IS_ROOT" -eq 1 ]; then
+    mkdir -p "$(dirname "$PROFILE_SNIPPET")"
+    cat >"$PROFILE_SNIPPET" <<EOF
 if [ -f "$PROXY_ENV_FILE" ]; then
   . "$PROXY_ENV_FILE"
 fi
 EOF
-  chmod 0644 "$PROFILE_SNIPPET"
+    chmod 0644 "$PROFILE_SNIPPET"
 
-  # Also add to zshenv for zsh shells (non-login shells)
-  if [ -f /etc/zsh/zshenv ]; then
-    if ! grep -q "$PROXY_ENV_FILE" /etc/zsh/zshenv 2>/dev/null; then
-      cat >>/etc/zsh/zshenv <<EOF
+    if [ -f /etc/zsh/zshenv ]; then
+      if ! grep -q "$PROXY_ENV_FILE" /etc/zsh/zshenv 2>/dev/null; then
+        cat >>/etc/zsh/zshenv <<EOF
 
 # Source proxy configuration from shai bootstrap
 if [ -f "$PROXY_ENV_FILE" ]; then
   . "$PROXY_ENV_FILE"
 fi
 EOF
-    fi
-  fi
-fi
-
-for pair in "${EXEC_ENVS[@]}"; do
-  key=${pair%%=*}
-  value=${pair#*=}
-  if [ -z "$key" ]; then
-    continue
-  fi
-  export "$key"="$value"
-done
-
-cd "$WORKSPACE" 2>/dev/null || die "failed to enter workspace $WORKSPACE"
-
-# Execute root commands if running as root
-if [ "$IS_ROOT" -eq 1 ] && [ ${#ROOT_CMDS[@]} -gt 0 ]; then
-  log_verbose "executing ${#ROOT_CMDS[@]} root command(s)"
-  for cmd in "${ROOT_CMDS[@]}"; do
-    if [ -n "$cmd" ]; then
-      log_verbose "executing root command: $cmd"
-      if ! eval "$cmd"; then
-        die "root command failed (exit $?): $cmd"
       fi
     fi
+  fi
+
+  for pair in "${EXEC_ENVS[@]}"; do
+    key=${pair%%=*}
+    value=${pair#*=}
+    if [ -z "$key" ]; then
+      continue
+    fi
+    export "$key"="$value"
   done
-fi
 
-argv=("${EXEC_CMD[@]}")
-if [ ${#argv[@]} -eq 0 ]; then
-  argv=("$user_shell" "-l")
-fi
+  cd "$WORKSPACE" 2>/dev/null || die "failed to enter workspace $WORKSPACE"
 
-resource_summary="none"
-if [ ${#RESOURCE_NAMES[@]} -gt 0 ]; then
-  resource_summary=$(printf '%s, ' "${RESOURCE_NAMES[@]}")
-  resource_summary=${resource_summary%, }
-fi
-image_desc=${IMAGE_NAME:-unknown}
-summary_message="Shai sandbox started using [$image_desc] as user [$TARGET_USER]. Resource sets: [$resource_summary]"
+  if [ "$IS_ROOT" -eq 1 ] && [ ${#ROOT_CMDS[@]} -gt 0 ]; then
+    log_verbose "executing ${#ROOT_CMDS[@]} root command(s)"
+    for cmd in "${ROOT_CMDS[@]}"; do
+      if [ -n "$cmd" ]; then
+        log_verbose "executing root command: $cmd"
+        if ! eval "$cmd"; then
+          die "root command failed (exit $?): $cmd"
+        fi
+      fi
+    done
+  fi
 
-# Notify host-side runner that setup has completed; the host strips the marker
-# prefix but relays the summary message to the user/stdout.
-printf '%s\n' "$summary_message"
+  argv=("${EXEC_CMD[@]}")
+  if [ ${#argv[@]} -eq 0 ]; then
+    argv=("$user_shell" "-l")
+  fi
 
-if [ "$IS_ROOT" -eq 1 ]; then
-  if command -v runuser >/dev/null 2>&1; then
-    exec runuser -u "$TARGET_USER" -- "${argv[@]}"
-  elif command -v su >/dev/null 2>&1; then
-    cmd=$(printf '%q ' "${argv[@]}")
-    cmd=${cmd% }
-    exec su -p "$TARGET_USER" -c "$cmd"
+  resource_summary="none"
+  if [ ${#RESOURCE_NAMES[@]} -gt 0 ]; then
+    resource_summary=$(printf '%s, ' "${RESOURCE_NAMES[@]}")
+    resource_summary=${resource_summary%, }
+  fi
+  image_desc=${IMAGE_NAME:-unknown}
+  summary_message="Shai sandbox started using [$image_desc] as user [$TARGET_USER]. Resource sets: [$resource_summary]"
+
+  printf '%s\n' "$summary_message"
+
+  if [ "$IS_ROOT" -eq 1 ]; then
+    if command -v su >/dev/null 2>&1; then
+      cmd=$(printf '%q ' "${argv[@]}")
+      cmd=${cmd% }
+      exec su -p "$TARGET_USER" -c "$cmd"
+    elif command -v runuser >/dev/null 2>&1; then
+      exec runuser -u "$TARGET_USER" --preserve-environment -- "${argv[@]}"
+    else
+      die "unable to switch user (runuser/su missing)"
+    fi
   else
-    die "unable to switch user (runuser/su missing)"
+    if [ "${EUID:-$(id -u)}" -ne "$DEV_UID" ]; then
+      die "bootstrap not running as $TARGET_USER and cannot switch users"
+    fi
+    exec "${argv[@]}"
   fi
-else
-  if [ "${EUID:-$(id -u)}" -ne "$DEV_UID" ]; then
-    die "bootstrap not running as $TARGET_USER and cannot switch users"
-  fi
-  exec "${argv[@]}"
-fi
+}
+
+main

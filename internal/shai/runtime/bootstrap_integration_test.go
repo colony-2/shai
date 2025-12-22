@@ -39,11 +39,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			// Verify that proxy and DNS are already running (bootstrap completed)
 			// Give services time to start via supervisord
@@ -60,7 +60,7 @@ apply:
 				echo "BOOTSTRAP_FAILED"
 				exit 1
 			`},
-			UseTTY:  false,
+			UseTTY: false,
 		},
 	}
 
@@ -100,11 +100,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"sh", "-c", `
 				test -d /run/shai && echo "RUN_DIR_EXISTS" &&
@@ -184,11 +184,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"cat", "/run/shai/allowed_domains.conf"},
 			UseTTY:  false,
@@ -240,11 +240,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"cat", "/var/log/shai/iptables.out"},
 			UseTTY:  false,
@@ -293,11 +293,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"id", "-un"},
 			UseTTY:  false,
@@ -341,11 +341,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"sh", "-c", "id -u && id -un"},
 			UseTTY:  false,
@@ -393,11 +393,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			// Add marker to easily find the UID in output
 			Command: []string{"sh", "-c", "echo 'UID_IS:' && id -u"},
@@ -452,11 +452,12 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:     tmpDir,
+		ConfigFile:     configPath,
+		Verbose:        testing.Verbose(),
+		ShowProgress:   false,
+		ReadWritePaths: []string{"."},
+		Stdout:         &output,
 		PostSetupExec: &ExecSpec{
 			// Test that user can write to workspace (functional requirement)
 			// Note: Workspace may be owned by host UID on mounted volumes
@@ -505,11 +506,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"sh", "-c", `
 				test -f /tmp/root_was_here && echo "FILE_EXISTS" &&
@@ -560,10 +561,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"echo", "should not run"},
 			UseTTY:  false,
@@ -606,11 +607,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"env"},
 			Env: map[string]string{
@@ -668,11 +669,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"sh", "-c", "echo CONTAINER_VAR=$CONTAINER_VAR"},
 			UseTTY:  false,

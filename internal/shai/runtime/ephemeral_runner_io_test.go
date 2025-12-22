@@ -65,12 +65,12 @@ func TestExecStartDetectorStripsMarker(t *testing.T) {
 	var triggered atomic.Bool
 
 	// The exact marker that will be output by the bootstrap script
-	marker := "Shai sandbox started using [ghcr.io/colony-2/shai-base:latest] as user [shai]. Resource sets: [foo, bar]"
+	marker := "Shai sandbox started"
 	detector := newExecStartDetector(&out, marker, func() {
 		triggered.Store(true)
 	})
 
-	summaryLine := marker + "\n"
+	summaryLine := "Shai sandbox started using [ghcr.io/colony-2/shai-base:latest] as user [shai]. Resource sets: [foo, bar]\n"
 	input := []byte("before\n" + summaryLine + "after\n")
 	if _, err := detector.Write(input[:10]); err != nil {
 		t.Fatalf("write chunk 1 failed: %v", err)

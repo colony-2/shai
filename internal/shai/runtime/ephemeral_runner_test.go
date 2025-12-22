@@ -146,3 +146,29 @@ func TestEffectiveWorkspaceDefaults(t *testing.T) {
 func TestEffectiveWorkspaceWithDotPrefix(t *testing.T) {
 	require.Equal(t, "/src/cmd", effectiveWorkspace("/src", []string{"./cmd"}))
 }
+
+func TestBuildDockerConfigsInjectsHostIDs(t *testing.T) {
+	tDir := t.TempDir()
+	mountBuilder, err := NewMountBuilder(tDir, nil)
+	require.NoError(t, err)
+
+	runner := &EphemeralRunner{
+		config: EphemeralConfig{
+			WorkingDir: tDir,
+		},
+		shaiConfig: &configpkg.Config{
+			User:      "shai",
+			Workspace: "/src",
+		},
+		mountBuilder: mountBuilder,
+		image:        "example",
+		hostEnv:      map[string]string{},
+		hostUID:      "1234",
+		hostGID:      "5678",
+	}
+
+	cfg, _, err := runner.buildDockerConfigs(false, "sandbox-test")
+	require.NoError(t, err)
+	require.Contains(t, cfg.Env, "DEV_UID=1234")
+	require.Contains(t, cfg.Env, "DEV_GID=5678")
+}

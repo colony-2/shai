@@ -1,6 +1,7 @@
 type: shai-sandbox
 version: 1
 image: ghcr.io/colony-2/shai-mega
+# user defaults to "shai" aligned to the host UID/GID at runtime
 resources:
   global:
     vars:

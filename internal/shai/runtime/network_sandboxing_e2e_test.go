@@ -39,10 +39,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			// Wait for proxy to be ready before making request
 			Command: []string{"sh", "-c", "for i in 1 2 3 4 5; do timeout 1 bash -c '</dev/tcp/127.0.0.1/18888' 2>/dev/null && break || sleep 1; done && curl -sS -m 10 https://example.com"},
@@ -84,10 +84,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"curl", "-sS", "-m", "5", "https://google.com"},
 			UseTTY:  false,
@@ -128,10 +128,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			// Wait for supervisord to bring up services, then verify they're running
 			Command: []string{"sh", "-c", `
@@ -150,7 +150,7 @@ apply:
 				echo "SERVICES_FAILED"
 				exit 1
 			`},
-			UseTTY:  false,
+			UseTTY: false,
 		},
 	}
 
@@ -188,10 +188,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			// Wait for dnsmasq to be fully ready (this should fail for blocked domain)
 			Command: []string{"sh", "-c", `
@@ -202,7 +202,7 @@ apply:
 				# Try to resolve blocked domain (should fail)
 				python3 -c 'import socket; socket.gethostbyname("google.com")'
 			`},
-			UseTTY:  false,
+			UseTTY: false,
 		},
 	}
 
@@ -240,10 +240,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			// Wait for dnsmasq to be fully ready, then test DNS resolution
 			Command: []string{"sh", "-c", `
@@ -262,7 +262,7 @@ apply:
 				# Now do the actual test
 				python3 -c 'import socket; ip=socket.gethostbyname("example.com"); print(f"DNS_OK:{ip}")'
 			`},
-			UseTTY:  false,
+			UseTTY: false,
 		},
 	}
 
@@ -301,11 +301,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"cat", "/var/log/shai/iptables.out"},
 			UseTTY:  false,
@@ -351,11 +351,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"env"},
 			UseTTY:  false,
@@ -410,10 +410,10 @@ apply:
 		// This test verifies the limitation exists (not a test bug)
 
 		cfg := EphemeralConfig{
-			WorkingDir:    tmpDir,
-			ConfigFile:    configPath,
-			Verbose:       testing.Verbose(),
-			ShowProgress:  false,
+			WorkingDir:   tmpDir,
+			ConfigFile:   configPath,
+			Verbose:      testing.Verbose(),
+			ShowProgress: false,
 			PostSetupExec: &ExecSpec{
 				// Wait for DNS, resolve domain, then test port connection
 				Command: []string{"sh", "-c", `
@@ -444,7 +444,7 @@ apply:
 						exit 0
 					fi
 				`},
-				UseTTY:  false,
+				UseTTY: false,
 			},
 		}
 
@@ -461,10 +461,10 @@ apply:
 
 	t.Run("blocked_port_fails", func(t *testing.T) {
 		cfg := EphemeralConfig{
-			WorkingDir:    tmpDir,
-			ConfigFile:    configPath,
-			Verbose:       testing.Verbose(),
-			ShowProgress:  false,
+			WorkingDir:   tmpDir,
+			ConfigFile:   configPath,
+			Verbose:      testing.Verbose(),
+			ShowProgress: false,
 			PostSetupExec: &ExecSpec{
 				// Wait for DNS, resolve domain, then test blocked port (should fail)
 				Command: []string{"sh", "-c", `
@@ -476,7 +476,7 @@ apply:
 					IP=$(python3 -c "import socket; print(socket.gethostbyname('github.com'))")
 					timeout 3 bash -c "</dev/tcp/$IP/9418"
 				`},
-				UseTTY:  false,
+				UseTTY: false,
 			},
 		}
 
@@ -516,11 +516,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"sh", "-c", "test -r /var/log/shai/iptables.out && echo ACCESSIBLE"},
 			UseTTY:  false,
@@ -563,11 +563,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			// Wait for proxy then use httpbin to check if we're coming through a proxy
 			Command: []string{"sh", "-c", "for i in 1 2 3 4 5; do timeout 1 bash -c '</dev/tcp/127.0.0.1/18888' 2>/dev/null && break || sleep 1; done && curl -sS -m 10 http://httpbin.org/get"},
@@ -613,10 +613,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			// Test localhost connectivity using Python (available in base image)
 			Command: []string{"sh", "-c", "python3 -m http.server 8888 >/dev/null 2>&1 & sleep 1 && curl -sS http://127.0.0.1:8888/ >/dev/null && echo 'LOCALHOST_OK'"},
@@ -666,10 +666,10 @@ apply:
 	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
 		PostSetupExec: &ExecSpec{
 			// Try to connect to 8.8.8.8 (Google DNS) which is not in allowlist
 			Command: []string{"sh", "-c", "timeout 3 bash -c '</dev/tcp/8.8.8.8/53' && echo 'DIRECT_IP_CONNECTED'"},
@@ -716,11 +716,11 @@ apply:
 
 	var output strings.Builder
 	cfg := EphemeralConfig{
-		WorkingDir:    tmpDir,
-		ConfigFile:    configPath,
-		Verbose:       testing.Verbose(),
-		ShowProgress:  false,
-		Stdout:        &output,
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			Command: []string{"cat", "/var/log/shai/iptables.out"},
 			UseTTY:  false,
@@ -739,7 +739,7 @@ apply:
 	iptablesRules := output.String()
 	// Check if IPv6 rules exist or if IPv6 is disabled
 	hasIPv6Rules := strings.Contains(iptablesRules, "IPv6") ||
-	                strings.Contains(iptablesRules, "ip6tables")
+		strings.Contains(iptablesRules, "ip6tables")
 
 	if hasIPv6Rules {
 		assert.Contains(t, iptablesRules, "REJECT", "IPv6 traffic should be rejected")

@@ -24,6 +24,8 @@ type SandboxConfig struct {
 	GracefulStopTimeout time.Duration
 	ImageOverride       string
 	UserOverride        string
+	HostUID             string
+	HostGID             string
 	Privileged          bool
 	ShowProgress        bool
 }
@@ -141,6 +143,8 @@ func (cfg SandboxConfig) runtimeConfig() runtimepkg.EphemeralConfig {
 		GracefulStopTimeout: normalized.GracefulStopTimeout,
 		ImageOverride:       normalized.ImageOverride,
 		UserOverride:        normalized.UserOverride,
+		HostUID:             normalized.HostUID,
+		HostGID:             normalized.HostGID,
 		Privileged:          normalized.Privileged,
 		ShowProgress:        normalized.ShowProgress,
 	}
