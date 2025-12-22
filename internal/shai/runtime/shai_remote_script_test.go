@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -216,7 +217,14 @@ func runShaiRemote(t *testing.T, extraEnv []string, args ...string) (stdout, std
 func scriptPath(t *testing.T) string {
 	t.Helper()
 	root := repoRoot(t)
-	script := filepath.Join(root, "bin", "shai-remote")
+
+	// On Windows, use shai-remote.bat; on Unix, use shai-remote
+	scriptName := "shai-remote"
+	if runtime.GOOS == "windows" {
+		scriptName = "shai-remote.bat"
+	}
+
+	script := filepath.Join(root, "bin", scriptName)
 	if _, err := os.Stat(script); err != nil {
 		t.Fatalf("shai-remote script missing: %v", err)
 	}

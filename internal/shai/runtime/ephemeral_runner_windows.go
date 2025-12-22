@@ -103,3 +103,10 @@ func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr,
 		close(done)
 	}
 }
+
+func dockerSocketCandidates() []string {
+	// On Windows, Docker Desktop uses named pipes
+	return []string{
+		"npipe:////./pipe/docker_engine",
+	}
+}
