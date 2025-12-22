@@ -82,7 +82,7 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
 				Source:   filepath.Join(m.WorkingDir, rwPath),
-				Target:   filepath.Join("/src", rwPath),
+				Target:   filepath.ToSlash(filepath.Join("/src", rwPath)),
 				ReadOnly: false,
 			})
 		}
@@ -94,7 +94,7 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
 				Source:   configDir,
-				Target:   filepath.Join("/src", ConfigDirName),
+				Target:   filepath.ToSlash(filepath.Join("/src", ConfigDirName)),
 				ReadOnly: true,
 			})
 		}
@@ -170,7 +170,7 @@ func (m *MountBuilder) BuildMountStrings() []string {
 			mountStrings = append(mountStrings, fmt.Sprintf(
 				"%s:/src/%s:rw",
 				filepath.Join(m.WorkingDir, rwPath),
-				rwPath,
+				filepath.ToSlash(rwPath),
 			))
 		}
 	}
@@ -181,7 +181,7 @@ func (m *MountBuilder) BuildMountStrings() []string {
 			mountStrings = append(mountStrings, fmt.Sprintf(
 				"%s:/src/%s:ro",
 				configDir,
-				ConfigDirName,
+				filepath.ToSlash(ConfigDirName),
 			))
 		}
 	}

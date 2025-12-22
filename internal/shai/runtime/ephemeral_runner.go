@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -618,7 +617,7 @@ func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
 				Source:   source,
-				Target:   m.Target,
+				Target:   filepath.ToSlash(m.Target),
 				ReadOnly: m.Mode != "rw",
 			})
 		}
@@ -981,10 +980,12 @@ func effectiveWorkspace(base string, rwPaths []string) string {
 		return base
 	}
 	rwPath := rwPaths[0]
-	if rwPath == "" || rwPath == "." || filepath.IsAbs(rwPath) {
+	// Check for Unix-style absolute paths (container paths always use /)
+	if rwPath == "" || rwPath == "." || strings.HasPrefix(rwPath, "/") {
 		return base
 	}
-	return path.Join(base, rwPath)
+	// Use filepath.ToSlash to ensure forward slashes for container paths
+	return filepath.ToSlash(filepath.Join(base, rwPath))
 }
 
 func chooseImage(defaultImage, cliOverride, applyOverride string) (string, string) {
