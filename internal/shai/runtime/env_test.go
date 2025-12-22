@@ -130,3 +130,18 @@ func TestEnv_FirstEqualsSplitsKeyValue(t *testing.T) {
 		assert.Equal(t, expectedValue, result[key], "%s should preserve equals signs in value", key)
 	}
 }
+
+// Test: hostUserIDs returns non-zero UIDs
+func TestHostUserIDs_ReturnsNonZeroUIDs(t *testing.T) {
+	uid, gid := hostUserIDs()
+
+	// UIDs should never be "0" - fallback to "4747" if host is root
+	assert.NotEqual(t, "0", uid, "UID should never be 0 (uses fallback 4747)")
+	assert.NotEqual(t, "0", gid, "GID should never be 0 (uses fallback 4747)")
+	assert.NotEqual(t, "", uid, "UID should not be empty")
+	assert.NotEqual(t, "", gid, "GID should not be empty")
+
+	// Should be valid numeric strings
+	assert.Regexp(t, `^\d+$`, uid, "UID should be numeric")
+	assert.Regexp(t, `^\d+$`, gid, "GID should be numeric")
+}

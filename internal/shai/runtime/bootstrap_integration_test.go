@@ -367,7 +367,7 @@ apply:
 	assert.NotContains(t, strings.Split(result, "\n")[0], "0", "Should not run as root (UID 0)")
 }
 
-// Test #24: User UID matches configured DEV_UID
+// Test #24: User UID matches configured DEV_UID (host UID)
 func TestBootstrap_UserUIDMatches(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -400,7 +400,7 @@ apply:
 		Stdout:       &output,
 		PostSetupExec: &ExecSpec{
 			// Add marker to easily find the UID in output
-			Command: []string{"sh", "-c", "echo 'UID_IS:' && id -u"},
+			Command: []string{"sh", "-c", "echo 'UID_IS:' && id -u && echo 'GID_IS:' && id -g"},
 			UseTTY:  false,
 		},
 	}
@@ -408,22 +408,29 @@ apply:
 	runner, err := NewEphemeralRunner(cfg)
 	require.NoError(t, err)
 
+	// Get the expected host UID/GID that should have been used
+	expectedUID, expectedGID := hostUserIDs()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	err = runner.Run(ctx)
 	require.NoError(t, err)
 
-	// Extract the line after UID_IS:
+	// Extract the UID and GID from output
 	lines := strings.Split(output.String(), "\n")
-	var uid string
+	var uid, gid string
 	for i, line := range lines {
 		if strings.Contains(line, "UID_IS:") && i+1 < len(lines) {
 			uid = strings.TrimSpace(lines[i+1])
-			break
+		}
+		if strings.Contains(line, "GID_IS:") && i+1 < len(lines) {
+			gid = strings.TrimSpace(lines[i+1])
 		}
 	}
-	assert.Equal(t, "4747", uid, "User UID should be 4747 (DEV_UID)")
+
+	assert.Equal(t, expectedUID, uid, "Container UID should match host UID")
+	assert.Equal(t, expectedGID, gid, "Container GID should match host GID")
 }
 
 // Test #25: Workspace directory has correct ownership
@@ -634,6 +641,62 @@ apply:
 	envVars := output.String()
 	assert.Contains(t, envVars, "CUSTOM_VAR_1=value1", "Custom env var 1 should be set")
 	assert.Contains(t, envVars, "CUSTOM_VAR_2=value2", "Custom env var 2 should be set")
+}
+
+// Test #28: Custom UID/GID override works
+func TestBootstrap_CustomUIDGIDOverride(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	configContent := `
+type: shai-sandbox
+version: 1
+image: ghcr.io/colony-2/shai-base:latest
+user: customuser
+resources:
+  test:
+    http:
+      - example.com
+apply:
+  - path: ./
+    resources: [test]
+`
+	configPath := filepath.Join(tmpDir, ".shai", "config.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+	var output strings.Builder
+	customUID := "9999"
+	customGID := "8888"
+	cfg := EphemeralConfig{
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
+		HostUID:      customUID,
+		HostGID:      customGID,
+		PostSetupExec: &ExecSpec{
+			Command: []string{"sh", "-c", "id -u && id -g && id -un"},
+			UseTTY:  false,
+		},
+	}
+
+	runner, err := NewEphemeralRunner(cfg)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err = runner.Run(ctx)
+	require.NoError(t, err)
+
+	result := output.String()
+	assert.Contains(t, result, customUID, "Should use custom UID")
+	assert.Contains(t, result, customGID, "Should use custom GID")
+	assert.Contains(t, result, "customuser", "Should create and use custom username")
 }
 
 // Test #30: Resource environment variables are injected
