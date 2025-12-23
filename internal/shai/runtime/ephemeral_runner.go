@@ -476,7 +476,7 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) 
 	mounts = append(mounts, resourceMounts...)
 	mounts = append(mounts, mount.Mount{
 		Type:     mount.TypeBind,
-		Source:   filepath.FromSlash(r.bootstrapMount),
+		Source:   filepath.ToSlash(r.bootstrapMount),
 		Target:   "/shai-bootstrap",
 		ReadOnly: false,
 	})
@@ -616,7 +616,7 @@ func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 			}
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
-				Source:   filepath.FromSlash(source),
+				Source:   filepath.ToSlash(source),
 				Target:   filepath.ToSlash(m.Target),
 				ReadOnly: m.Mode != "rw",
 			})

@@ -62,7 +62,7 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 		// Base mount: read-only
 		{
 			Type:     mount.TypeBind,
-			Source:   filepath.FromSlash(m.WorkingDir),
+			Source:   filepath.ToSlash(m.WorkingDir),
 			Target:   "/src",
 			ReadOnly: true,
 		},
@@ -81,7 +81,7 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 		} else {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
-				Source:   filepath.FromSlash(filepath.Join(m.WorkingDir, rwPath)),
+				Source:   filepath.ToSlash(filepath.Join(m.WorkingDir, rwPath)),
 				Target:   filepath.ToSlash(filepath.Join("/src", rwPath)),
 				ReadOnly: false,
 			})
@@ -93,7 +93,7 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 		if info, err := os.Stat(configDir); err == nil && info.IsDir() {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
-				Source:   filepath.FromSlash(configDir),
+				Source:   filepath.ToSlash(configDir),
 				Target:   filepath.ToSlash(filepath.Join("/src", ConfigDirName)),
 				ReadOnly: true,
 			})
