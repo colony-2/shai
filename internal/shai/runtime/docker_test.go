@@ -9,21 +9,24 @@ import (
 	"github.com/docker/docker/client"
 )
 
-// isDockerAvailable attempts to connect to Docker using common socket paths.
+// isDockerAvailable attempts to connect to Docker using FromEnv first, then common socket paths.
 func isDockerAvailable() bool {
+	// First try client.FromEnv which works on all platforms
+	if cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, pingErr := cli.Ping(ctx)
+		cancel()
+		cli.Close()
+		if pingErr == nil {
+			return true
+		}
+	}
+
+	// Fallback to common Unix socket paths
 	socketPaths := []string{
 		"unix:///var/run/docker.sock",                                     // Linux default
 		"unix://" + os.Getenv("HOME") + "/.docker/run/docker.sock",        // Docker Desktop on macOS
 		"unix:///Users/" + os.Getenv("USER") + "/.docker/run/docker.sock", // Alternative macOS path
-	}
-
-	if cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err == nil {
-		defer cli.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if _, err = cli.Ping(ctx); err == nil {
-			return true
-		}
 	}
 
 	for _, socketPath := range socketPaths {

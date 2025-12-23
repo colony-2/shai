@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -64,7 +63,7 @@ func (e *Executor) Run(ctx context.Context, entry *Entry, args []string, streams
 	cmd := exec.CommandContext(execCtx, shell, "-lc", commandLine)
 	cmd.Dir = e.WorkingDir
 	cmd.Env = os.Environ()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureProcAttr(cmd)
 	cmd.Stdout = writerOrDiscard(streams.Stdout)
 	cmd.Stderr = writerOrDiscard(streams.Stderr)
 
@@ -76,11 +75,7 @@ func (e *Executor) Run(ctx context.Context, entry *Entry, args []string, streams
 			return
 		default:
 		}
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-			time.Sleep(250 * time.Millisecond)
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
+		killProcessGroup(cmd)
 	}()
 
 	if err := cmd.Start(); err != nil {
