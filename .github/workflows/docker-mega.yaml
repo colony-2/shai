@@ -2,6 +2,8 @@ name: Build and Push shai-mega Docker Image
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'docker/mega/**'
       - '.github/workflows/docker-mega.yaml'
@@ -15,7 +17,9 @@ permissions:
   packages: write
 
 jobs:
+
   build-arch:
+    if: github.repository == 'colony-2/shai'
     strategy:
       matrix:
         include:
