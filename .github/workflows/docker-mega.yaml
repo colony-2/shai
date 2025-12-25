@@ -2,6 +2,8 @@ name: Build and Push shai-mega Docker Image
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'docker/mega/**'
       - '.github/workflows/docker-mega.yaml'
@@ -15,7 +17,9 @@ permissions:
   packages: write
 
 jobs:
+
   build-arch:
+    if: github.repository == 'colony-2/shai'
     strategy:
       matrix:
         include:
@@ -56,6 +60,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate cache bust value
+        id: cache_bust
+        run: |
+          # Use timestamp for scheduled/manual runs to bust cache and fetch latest versions
+          # Use empty string for push events to allow normal caching
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+          else
+            echo "value=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push arch-specific image
         uses: docker/build-push-action@v6
         with:
@@ -65,6 +80,7 @@ jobs:
           tags: ghcr.io/colony-2/shai-mega:${{ matrix.variant }}-latest-${{ matrix.arch }}
           build-args: |
             BASE_IMAGE=${{ matrix.base_image }}
+            CACHE_BUST=${{ steps.cache_bust.outputs.value }}
           cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ matrix.arch }}
 

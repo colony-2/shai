@@ -10,10 +10,14 @@ ARG BASE_IMAGE=debian:bookworm-slim
 FROM ${BASE_IMAGE} AS version-fetcher
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG CACHE_BUST
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates jq && \
     rm -rf /var/lib/apt/lists/*
+
+# Cache-busting layer to force version refresh when needed
+RUN echo "Cache bust: ${CACHE_BUST:-default}"
 
 # Fetch latest versions of languages
 RUN curl -s https://go.dev/dl/?mode=json | jq -r '.[0].version' | sed 's/^go//' > /tmp/go.version && \
