@@ -1,0 +1,73 @@
+baseURL: https://shai.run/
+languageCode: en-us
+title: shai (shī)
+
+# Use Hextra theme
+theme: hextra
+
+# Enable emojis
+enableEmoji: true
+
+# Enable git info
+enableGitInfo: true
+
+params:
+  description: "A sandboxing tool for running CLI-based AI agents inside containers"
+
+  navbar:
+    displayTitle: true
+    displayLogo: false
+    width: wide
+
+  page:
+    width: wide
+
+  theme:
+    default: light
+    displayToggle: true
+
+  footer:
+    displayCopyright: true
+    displayPoweredBy: false
+
+  editURL:
+    enable: true
+    base: "https://github.com/colony-2/shai/edit/main/docs"
+
+  search:
+    enable: true
+    type: flexsearch
+    flexsearch:
+      index: content
+
+menu:
+  main:
+    - identifier: documentation
+      name: Documentation
+      pageRef: /docs
+      weight: 1
+    - identifier: examples
+      name: Examples
+      pageRef: /docs/examples
+      weight: 2
+    - identifier: github
+      name: GitHub
+      url: https://github.com/colony-2/shai
+      weight: 3
+      params:
+        icon: github
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    noClasses: false
+    lineNos: true
+    lineNumbersInTable: false
+    style: monokai
+
+outputs:
+  home:
+    - HTML
+    - RSS

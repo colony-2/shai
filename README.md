@@ -94,8 +94,7 @@ Shai automatically loads `<workspace>/.shai/config.yaml` unless `--config` overr
 resources:
   my-tools:
     vars:
-      - source: ${{ env.OPENAI_API_KEY }}
-        target: OPENAI_API_KEY
+      - source: OPENAI_API_KEY
     mounts:
       - source: ${{ env.HOME }}/.cache/model
         target: /home/${{ conf.TARGET_USER }}/.cache/model
@@ -117,7 +116,7 @@ resources:
     options:
       privileged: false
 ```
-- `vars` – Copies values from host environment variables (`source`) into container variables (`target`). Missing env references cause load failures.
+- `vars` – Maps host environment variable names (`source`) to container variables (`target`). The `source` field should be the plain environment variable name (e.g., `OPENAI_API_KEY`), not a template expression. The `target` field is optional; if omitted, the variable keeps the same name in the container. Missing env variables cause load failures.
 - `mounts` – Bind mount host paths into the container. `mode` defaults to `ro`; valid values are `ro` or `rw`. Non-existent source directories are skipped with a warning at startup. Use `${{ conf.TARGET_USER }}` in target paths to reference the configured user.
 - `calls` – Expose curated host commands inside the sandbox. Names must be unique per path, `command` is executed on the host, and `allowed-args` (optional) is a regex that filters arguments forwarded from inside the container.
 - `http` – Hostnames the sandbox is allowed to reach. Use this to tighten egress beyond the defaults.
@@ -164,8 +163,7 @@ resources:
     http: [openai.com, api.openai.com]
   agent-dev:
     vars:
-      - source: ${{ env.OPENAI_API_KEY }}
-        target: OPENAI_API_KEY
+      - source: OPENAI_API_KEY
     mounts:
       - source: ${{ env.HOME }}/.cache/agents
         target: /home/${{ conf.TARGET_USER }}/.cache/agents

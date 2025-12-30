@@ -1,3 +1,8 @@
 bin/shai
 .idea
 .test-home/
+
+# Hugo generated files
+/docs/public/
+/docs/resources/_gen/
+/docs/.hugo_build.lock
