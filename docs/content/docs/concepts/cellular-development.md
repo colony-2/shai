@@ -3,11 +3,11 @@ title: Cellular Development
 weight: 1
 ---
 
-Shai is built around the concept of **cellular software development** - giving agents constrained access to individual components rather than entire repositories.
+Shai is built around the concept of **cellular software development** - establishing clear boundaries and guardrails that define what agents can and cannot modify within your codebase.
 
 ## The Problem
 
-Traditional AI agent workflows give agents access to your entire codebase:
+Traditional AI agent workflows give agents write access to your entire codebase:
 
 ```
 my-app/
@@ -20,9 +20,10 @@ my-app/
 
 This creates several issues:
 
-- **Large blast radius**: A bug in the agent can damage unrelated code
-- **Security risks**: Agents can accidentally commit credentials
-- **Context overload**: Agents waste tokens understanding irrelevant code
+- **Scope creep**: Agents make changes beyond their assigned task ("I'll just remove that failing test in the other module")
+- **Overreach**: Overeager agents push to production or modify critical infrastructure
+- **No validation boundaries**: No checkpoints to verify changes at component boundaries
+- **Security risks**: Agents can accidentally commit credentials or modify sensitive configs
 - **Merge conflicts**: Multiple agents working in parallel conflict
 
 ## The Cellular Approach
@@ -39,25 +40,52 @@ my-app/
 ```
 
 The agent can:
-- ✅ Read the entire codebase for context
-- ✅ Modify only `backend/auth/`
+- ✅ Read all workspace code for context (all files in `/src` are **visible**)
+- ✅ Modify only `backend/auth/` (write access is **restricted**)
 - ❌ Change unrelated components
 - ❌ Accidentally modify config files
+- ❌ Access credentials or environment variables (unless explicitly exposed via resource sets)
+
+{{< callout type="info" >}}
+**Cellular development is not about hiding code.** Agents can read all workspace files for context. It's about establishing **guardrails** - controlling what agents can modify and creating **validation boundaries** where changes can be reviewed. Credentials and environment variables remain protected unless explicitly exposed.
+{{< /callout >}}
 
 ## Benefits
 
-### 1. Reduced Blast Radius
+### 1. Agent Guardrails
 
-If an agent makes a mistake, it's contained to the specific component it's working on.
+Define clear boundaries for what each agent is allowed to modify. This prevents scope creep and overreach.
 
 ```bash
-# Agent can only affect the auth module
+# Agent works on auth, cannot "helpfully" modify other modules
 shai -rw backend/auth -- claude-code
 ```
 
-### 2. Parallel Workflows
+**Prevents scenarios like:**
+- "That test in the payments module is failing, I'll just remove it"
+- "I found AWS credentials in the config, let me deploy this to production"
+- "The frontend needs updating too, I'll fix that while I'm at it"
 
-Multiple agents can work simultaneously on different components:
+### 2. Validation Boundaries
+
+Each cell boundary is a checkpoint where you can validate changes from the cell's perspective. Before accepting modifications to a cell, you can ensure:
+- Critical functionality remains intact
+- Interfaces aren't unexpectedly modified
+- Security-sensitive code hasn't been altered
+- Tests still pass
+
+### 3. Reduced Blast Radius
+
+If an agent makes a mistake or goes off-track, the damage is contained to its designated area.
+
+```bash
+# Mistake is contained to the auth module
+shai -rw backend/auth -- claude-code
+```
+
+### 4. Parallel Workflows
+
+Multiple agents can work simultaneously on different cells without conflicts:
 
 ```bash
 # Terminal 1: Agent working on auth
@@ -69,11 +97,7 @@ shai -rw backend/payments -- gemini-cli
 # No conflicts! Each agent has its own cell.
 ```
 
-### 3. Context Efficiency
-
-Agents focus on relevant code instead of trying to understand an entire monorepo.
-
-### 4. Security
+### 5. Security
 
 Credentials and configuration files stay read-only unless explicitly needed.
 
@@ -182,12 +206,19 @@ shai -rw backend/auth
 # Inside the sandbox:
 # - Can write to /src/backend/auth
 # - Can read /src/frontend, /src/backend/*, etc.
+# - Cannot access env vars, ~/.aws, or other host resources
+#   (unless explicitly exposed via resource sets)
 ```
 
-This allows agents to:
+**Workspace code visibility is unrestricted.** Agents can see and understand all files in the workspace. This is intentional and important - it allows agents to:
 - Understand how components integrate
-- Follow existing patterns
-- Avoid breaking interfaces
+- Follow existing patterns from other modules
+- Avoid breaking interfaces and contracts
+- Make informed decisions about their changes
+
+**Write boundaries are the guardrails.** Restricting write access is what prevents agents from making changes beyond their scope, even when they can see opportunities elsewhere in the code.
+
+**Credentials remain protected.** Even though workspace code is readable, environment variables, home directories, and other system resources are isolated unless explicitly exposed through resource sets.
 
 ## Cellular + Resource Sets
 
@@ -218,17 +249,22 @@ When you run `shai -rw backend/payments`, you automatically get the Stripe API a
 
 ### ✅ Do
 
-- Start with the smallest necessary scope
-- Use cellular development even for solo projects
+- Start with the smallest necessary scope for the task
+- Use cellular development even for solo projects (protects against agent overreach)
 - Combine related directories when they must change together
-- Let agents read the full codebase for context
+- Let agents read the full workspace for context (code visibility is good)
+- Think of cells as validation boundaries, not information barriers
+- Define cells around components that should be validated as a unit
+- Use resource sets to explicitly expose credentials only when needed
 
 ### ❌ Don't
 
-- Give agents root-level write access (`-rw .`)
+- Give agents root-level write access (`-rw .`) - this defeats the guardrails
 - Make unrelated directories writable together
 - Assume agents need write access everywhere
-- Forget that read access provides context
+- Try to "hide" workspace code from agents - that's not the goal
+- Forget that boundaries help you validate changes at component edges
+- Confuse code visibility (workspace files are readable) with credential access (requires explicit resource sets)
 
 ## Next Steps
 

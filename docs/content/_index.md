@@ -58,7 +58,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Built for Cellular Development"
-    subtitle="Constrain agents to specific components instead of giving them cross-repo access. Limit changes to individual subdirectories."
+    subtitle="Establish clear boundaries and guardrails. Agents can read all workspace code for context but only modify designated areas, preventing scope creep and overreach."
     style="background: radial-gradient(ellipse at 50% 80%,rgba(142,53,74,0.15),hsla(0,0%,100%,0));"
   >}}
   {{< hextra/feature-card

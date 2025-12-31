@@ -17,13 +17,13 @@ Shai is built around five key concepts:
 
 ## Quick Mental Model
 
-Think of Shai as a bouncer for your AI agents:
+Think of Shai as establishing guardrails for your AI agents:
 
-- **Cellular Development**: Only let the agent into certain rooms (directories)
-- **Resource Sets**: Define what's available in each room (network, files, tools)
-- **Apply Rules**: Decide which rooms get which resources
+- **Cellular Development**: Define which areas agents can modify (they can read all workspace code, but only change specific parts)
+- **Resource Sets**: Define what's available in each area (network, credentials, host mounts)
+- **Apply Rules**: Decide which areas get which resources
 - **Selective Elevation**: Provide a phone to call outside when needed
-- **Architecture**: How the bouncer enforces all these rules
+- **Architecture**: How Shai enforces all these rules
 
 {{< cards >}}
   {{< card link="cellular-development" title="Cellular Development" icon="cube" >}}
