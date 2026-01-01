@@ -39,7 +39,7 @@ Comprehensive development environment with multiple language runtimes, tools, an
 ### AI CLI Tools
 
 - **Claude Code** - Anthropic's official CLI
-- **Codex** - OpenAI's coding agent (if available)
+- **Codex** - OpenAI's coding agent
 - **Gemini CLI** - Google's AI CLI
 - **Moonrepo** - Repository management tool
 

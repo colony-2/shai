@@ -104,7 +104,7 @@ npms:
     extra:
       author:
         name: Colony 2
-        email: noreply@colony2.io
+        email: noreply@colony2.com
       keywords:
         - sandbox
         - docker
@@ -129,7 +129,7 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     commit_author:
       name: colony2-bot
-      email: bot@colony2.io
+      email: bot@colony2.com
     commit_msg_template: "Cask update for {{ .ProjectName }} version {{ .Tag }}"
     homepage: "https://github.com/colony-2/shai"
     description: "Sandboxing shell for running AI coding agents inside Docker containers"

@@ -1,13 +1,51 @@
 ---
-title: Comparison
+title: Comparison & Prior Art
 weight: 11
 ---
 
-How Shai compares to other tools and approaches.
+Understanding where Shai came from and how it compares to other tools.
 
-## Shai vs Devcontainers
+## Inspiration & Origins
 
-### Key Differences
+### Built on Devcontainers
+
+The first version of Shai was built on top of [devcontainers](https://containers.dev). The original underlying library can be [seen here](https://github.com/colony-2/devcontainer-go).
+
+Devcontainers are great and were a good place for Shai to start. However, over time, the design goal differences between Shai and Devcontainers became challenging, and we ultimately decided to define an alternative configuration approach.
+
+### Why We Moved Away
+
+While devcontainers excel at their intended use case, several fundamental differences made them unsuitable as Shai's foundation:
+
+**Configuration Segmentation** - The devcontainer spec is not designed for segmented configuration. There's no native way to specify that subdirectory `a` should get different resources than subdirectory `b`. Shai's cellular development model requires this kind of path-based resource mapping.
+
+**Lifecycle Expectations** - Devcontainers are expected to be longer-lived development environments. Features can take 30 seconds to many minutes to install. Using features in Shai meant every new session had a large startup wait, which conflicts with Shai's goal of ephemeral, task-specific containers that start in seconds.
+
+**Feature Scope** - There are many features in devcontainers. Shai only needed a small subset of them. The additional complexity wasn't providing value for Shai's specific use case of sandboxing AI agents.
+
+**Sandboxing Controls** - Devcontainers don't have built-in sandboxing controls for things like network firewalling or filesystem restrictions. You can define these in a feature or container image, but they're basically DIY. Shai needed these controls to be first-class primitives.
+
+**Ephemeral vs Persistent** - The devcontainers tools are not really built for throw-away ephemeral containers. They assume some level of persistence and state management that doesn't align with Shai's model of starting fresh for each task.
+
+
+### Design Philosophy
+
+The move away from devcontainers led to several core Shai design principles:
+
+1. **Fast startup** - No features, no long initialization
+2. **Sandboxing first** - Network filtering and filesystem controls are built-in
+3. **Cellular by default** - Path-based resource sets enable fine-grained access control
+4. **Ephemeral** - Assume containers are disposable
+5. **Configuration safety** - Actively prevent credential leakage
+6. **Minimal scope** - Only include what's needed for AI agent sandboxing
+
+**Shai has no desire to replace devcontainers.** They are focused on two different use cases.
+
+## Comparing Shai to Other Tools
+
+### Shai vs Devcontainers
+
+#### Key Differences
 
 | Feature | Shai | Devcontainers |
 |---------|------|---------------|
@@ -21,22 +59,22 @@ How Shai compares to other tools and approaches.
 | **Apply Rules** | Path-based resource mapping | Not supported |
 | **Remote Calls** | Built-in via MCP | Not supported |
 
-### When to Use Devcontainers
+#### When to Use Each
 
+**Use Devcontainers for:**
 - Long-lived development environments
 - Complex IDE integration (VS Code)
 - Team standardization on development tools
 - Rich feature ecosystem
 
-### When to Use Shai
-
+**Use Shai for:**
 - Running AI agents safely
 - Cellular development workflows
 - Ephemeral, task-specific environments
 - Fine-grained network/filesystem controls
 - Quick iteration cycles
 
-### Can They Work Together?
+#### Can They Work Together?
 
 Yes! Use devcontainers for your development environment and Shai for running AI agents:
 
@@ -45,9 +83,9 @@ Yes! Use devcontainers for your development environment and Shai for running AI 
 shai -rw src -- claude
 ```
 
-## Shai vs Plain Docker
+### Shai vs Plain Docker
 
-### What Shai Adds
+#### What Shai Adds
 
 | Feature | Plain Docker | Shai |
 |---------|--------------|------|
@@ -59,21 +97,21 @@ shai -rw src -- claude
 | **Bootstrap** | Manual scripts | Automatic |
 | **User Management** | Manual | Automatic (UID/GID matching) |
 
-### When to Use Plain Docker
+#### When to Use Each
 
+**Use Plain Docker for:**
 - Building container images
 - Production deployments
 - Long-running services
 - Maximum control and flexibility
 
-### When to Use Shai
-
+**Use Shai for:**
 - Running AI agents
 - Development sandboxing
 - Quick prototyping
 - Configuration-driven workflows
 
-### Shai Uses Docker
+#### Shai Uses Docker
 
 Shai is built **on top of** Docker - it's not a replacement:
 
@@ -87,9 +125,9 @@ Shai is built **on top of** Docker - it's not a replacement:
 └─────────────────────┘
 ```
 
-## Shai vs Virtual Machines
+### Shai vs Virtual Machines
 
-### Comparison
+#### Comparison
 
 | Feature | VMs | Shai (Containers) |
 |---------|-----|-------------------|
@@ -100,23 +138,23 @@ Shai is built **on top of** Docker - it's not a replacement:
 | **Network** | Virtual network required | Native Docker networking |
 | **Filesystem** | Virtual disk | Direct bind mounts |
 
-### When to Use VMs
+#### When to Use Each
 
+**Use VMs for:**
 - Strong isolation requirements (untrusted code)
 - Different operating systems
 - Kernel-level testing
 - Legacy applications
 
-### When to Use Shai
-
+**Use Shai for:**
 - Fast iteration cycles
 - Resource efficiency
 - Modern development workflows
 - AI agent sandboxing
 
-## Shai vs Firecracker/Kata
+### Shai vs Firecracker/Kata
 
-### Lightweight VMs
+#### Lightweight VMs
 
 Firecracker and Kata Containers provide VM-level isolation with container-like speed.
 
@@ -129,23 +167,23 @@ Firecracker and Kata Containers provide VM-level isolation with container-like s
 | **Complexity** | Low | Higher |
 | **Compatibility** | All Docker images | Special configuration |
 
-### When to Use Firecracker/Kata
+#### When to Use Each
 
+**Use Firecracker/Kata for:**
 - Production multi-tenancy
 - Untrusted code execution
 - Strong isolation requirements
 - Serverless platforms
 
-### When to Use Shai
-
+**Use Shai for:**
 - Development workflows
 - AI agent sandboxing
 - Quick iteration
 - Standard Docker images
 
-## Shai vs nix/direnv
+### Shai vs nix/direnv
 
-### Environment Management
+#### Environment Management
 
 | Feature | Shai | nix/direnv |
 |---------|------|------------|
@@ -156,108 +194,31 @@ Firecracker and Kata Containers provide VM-level isolation with container-like s
 | **Setup** | Docker required | nix/direnv install |
 | **Reproducibility** | High (images) | Very high (nix) |
 
-### When to Use nix/direnv
+#### When to Use Each
 
+**Use nix/direnv for:**
 - Pure development environments
 - Reproducible builds
 - No container overhead
 - Shell-based workflows
 
-### When to Use Shai
-
+**Use Shai for:**
 - AI agent sandboxing
 - Network isolation needed
 - Filesystem protection required
 - Container-based workflows
 
-## Summary
+## Quick Reference
 
-### Use Shai When
+### Use Shai When You Need
 
-✅ Running AI agents
-✅ Need network filtering
-✅ Want read-only workspace by default
-✅ Cellular development workflows
-✅ Quick, ephemeral environments
-✅ Fine-grained resource control
+- AI agent sandboxing
+- Network filtering
+- Read-only workspace by default
+- Cellular development workflows
+- Quick, ephemeral environments
+- Fine-grained resource control
 
-### Use Other Tools When
-
-- **Devcontainers** - Long-lived dev environments, IDE integration
-- **Plain Docker** - Building images, production deployments
-- **VMs** - Strong isolation, different OSes
-- **Firecracker/Kata** - Production multi-tenancy
-- **nix/direnv** - Pure, reproducible shell environments
-
-## Migration Guides
-
-### From Devcontainers
-
-```json
-// .devcontainer/devcontainer.json
-{
-  "image": "mcr.microsoft.com/devcontainers/python:3.11",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {}
-  }
-}
-```
-
-**Becomes:**
-
-```yaml
-# .shai/config.yaml
-type: shai-sandbox
-version: 1
-image: ghcr.io/colony-2/shai-mega  # Includes Node + Python
-
-resources:
-  dev-tools:
-    http:
-      - npmjs.org
-      - pypi.org
-
-apply:
-  - path: ./
-    resources: [dev-tools]
-```
-
-### From Docker Compose
-
-```yaml
-# docker-compose.yml
-services:
-  app:
-    image: node:20
-    volumes:
-      - .:/workspace
-    environment:
-      - API_KEY=${API_KEY}
-```
-
-**Becomes:**
-
-```yaml
-# .shai/config.yaml
-type: shai-sandbox
-version: 1
-image: ghcr.io/colony-2/shai-mega
-
-resources:
-  app:
-    vars:
-      - source: API_KEY
-
-apply:
-  - path: ./
-    resources: [app]
-```
-
-Usage:
-```bash
-# Instead of: docker-compose run app
-shai -rw . -- npm start
-```
 
 ## Best Practices
 
@@ -269,18 +230,6 @@ Don't force Shai where another tool fits better:
 - **Production**: Docker/Kubernetes
 - **Build pipelines**: Plain Docker
 - **AI agents**: Shai ✅
-
-### Combine Tools
-
-Use multiple tools together:
-
-```bash
-# Devcontainer for development
-devcontainer up
-
-# Shai for running agents inside devcontainer
-shai -rw src -- claude
-```
 
 ## Learn More
 

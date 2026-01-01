@@ -234,7 +234,7 @@ Log remote call invocations on the host side in your call scripts.
 Found a security issue? Report it responsibly:
 
 1. **Don't** open a public GitHub issue
-2. **Do** email security@colony2.io (if available) or create a private security advisory
+2. **Do** email [security@colony2.com](mailto:security@colony2.com) or create a private security advisory
 3. Include detailed reproduction steps
 4. Allow time for patch before public disclosure
 

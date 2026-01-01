@@ -422,16 +422,11 @@ Include:
 - Full error message
 - Steps to reproduce
 
-### Community Support
-
-- [GitHub Discussions](https://github.com/colony-2/shai/discussions)
-- [Discord](#) (if available)
-
 ## FAQ
 
 **Q: Can I run Docker inside Shai?**
 
-A: Yes, but requires privileged mode:
+A: Yes, but requires privileged mode. You can review the [.shai/config.yaml](https://github.com/colony-2/shai/blob/main/.shai/config.yaml) in the shai repo to see how it runs DIND for tests.
 
 ```yaml
 resources:
@@ -446,7 +441,7 @@ resources:
 
 **Q: Can I use Shai on Windows?**
 
-A: Yes, via WSL2 with Docker Desktop.
+A: Probably, but not officially supported. We're [still working on some path resolution issues](https://github.com/colony-2/shai/pull/4).
 
 **Q: How do I share data between sessions?**
 
@@ -469,4 +464,4 @@ shai -rw src
 
 **Q: Can I modify .shai/config.yaml?**
 
-A: Not when workspace root is writable (security feature). It's automatically remounted read-only.
+A: On the host, yes. Not inside the container. It's automatically remounted read-only to avoid a agent escalating it's own access.

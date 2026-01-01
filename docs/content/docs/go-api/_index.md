@@ -1,5 +1,5 @@
 ---
-title: Go API
+title: Embedding Shai with Golang
 weight: 7
 ---
 
