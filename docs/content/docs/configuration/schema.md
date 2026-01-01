@@ -5,6 +5,10 @@ weight: 1
 
 Complete schema documentation for `.shai/config.yaml`.
 
+{{< callout type="info" >}}
+**See also:** [Default configuration file](https://github.com/colony-2/shai/blob/main/internal/shai/runtime/config/shai.default.yaml) used when no custom config exists.
+{{< /callout >}}
+
 ## Top-Level Keys
 
 ### `type`
@@ -268,7 +272,7 @@ resources:
 - Call names must be unique within a single workspace path
 - Arguments are validated against `allowed-args` regex before execution
 - Missing `allowed-args` means the call accepts no arguments
-- Calls are invoked with `shai-remote <name> [args]` inside the container
+- Calls are invoked with `shai-remote call <name> [args]` inside the container
 
 {{< callout type="error" >}}
 **Security:** Always use strict `allowed-args` patterns to prevent command injection.

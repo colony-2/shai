@@ -23,7 +23,7 @@ Generate a default `.shai/config.yaml` file.
 shai generate
 ```
 
-Creates `.shai/config.yaml` with sensible defaults.
+Creates `.shai/config.yaml` with sensible defaults based on the [embedded default config](https://github.com/colony-2/shai/blob/main/internal/shai/runtime/config/shai.default.yaml).
 
 ### `shai version`
 
@@ -133,7 +133,7 @@ Override config file location.
 shai --config /path/to/custom-config.yaml
 ```
 
-Default: `.shai/config.yaml` in workspace root
+Default: `.shai/config.yaml` in workspace root, falls back to [embedded defaults](https://github.com/colony-2/shai/blob/main/internal/shai/runtime/config/shai.default.yaml) if not found
 
 ### `--help, -h`
 
@@ -322,7 +322,7 @@ shai -rw src
 shai
 
 # No config = uses embedded defaults
-shai  # Works even without .shai/config.yaml
+shai  # Works even without .shai/config.yaml (uses default config)
 ```
 
 ## See Also

@@ -184,7 +184,7 @@ resources:
 
 ```bash
 # Agent can invoke the call
-shai-remote flash-device --port=/dev/ttyUSB0
+shai-remote call flash-device --port=/dev/ttyUSB0
 ```
 
 See [Selective Elevation](../selective-elevation) for more details.

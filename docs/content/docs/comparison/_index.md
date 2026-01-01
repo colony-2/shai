@@ -42,7 +42,7 @@ Yes! Use devcontainers for your development environment and Shai for running AI 
 
 ```bash
 # Inside your devcontainer
-shai -rw src -- claude-code
+shai -rw src -- claude
 ```
 
 ## Shai vs Plain Docker
@@ -279,7 +279,7 @@ Use multiple tools together:
 devcontainer up
 
 # Shai for running agents inside devcontainer
-shai -rw src -- claude-code
+shai -rw src -- claude
 ```
 
 ## Learn More

@@ -86,7 +86,7 @@ Get started with Shai immediately without building custom images:
 
 ```bash
 npm install -g @colony2/shai
-shai -rw src -- claude-code
+shai -rw src -- claude
 ```
 
 ### 2. Polyglot Development
@@ -104,7 +104,7 @@ Pre-installed AI tools mean agents can run immediately:
 
 ```bash
 # Claude Code is already installed
-shai -rw . -- claude-code
+shai -rw . -- claude
 
 # Or Gemini CLI
 shai -rw . -- gemini-cli
@@ -163,7 +163,7 @@ All language toolchains are installed system-wide:
 /usr/bin/pip3
 
 # AI Tools
-/usr/local/bin/claude-code
+/usr/local/bin/claude
 /usr/local/bin/gemini-cli
 ```
 

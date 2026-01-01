@@ -58,7 +58,7 @@ Define clear boundaries for what each agent is allowed to modify. This prevents 
 
 ```bash
 # Agent works on auth, cannot "helpfully" modify other modules
-shai -rw backend/auth -- claude-code
+shai -rw backend/auth -- claude
 ```
 
 **Prevents scenarios like:**
@@ -80,7 +80,7 @@ If an agent makes a mistake or goes off-track, the damage is contained to its de
 
 ```bash
 # Mistake is contained to the auth module
-shai -rw backend/auth -- claude-code
+shai -rw backend/auth -- claude
 ```
 
 ### 4. Parallel Workflows
@@ -89,7 +89,7 @@ Multiple agents can work simultaneously on different cells without conflicts:
 
 ```bash
 # Terminal 1: Agent working on auth
-shai -rw backend/auth -- claude-code
+shai -rw backend/auth -- claude
 
 # Terminal 2: Agent working on payments
 shai -rw backend/payments -- gemini-cli
@@ -124,7 +124,7 @@ These paths determine:
 ### Frontend Component
 
 ```bash
-shai -rw src/components/LoginForm -- claude-code
+shai -rw src/components/LoginForm -- claude
 ```
 
 Agent can:
@@ -177,7 +177,7 @@ Each package or service is a cell. Agents work on one cell at a time:
 
 ```bash
 # Working on the web app
-shai -rw packages/web-app -- claude-code
+shai -rw packages/web-app -- claude
 
 # Working on the auth service
 shai -rw services/auth -- codex

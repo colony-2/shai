@@ -23,7 +23,7 @@ shai generate
 This creates `.shai/config.yaml` with sensible defaults.
 
 {{< callout type="info" >}}
-**Configuration is optional!** If no config file exists, Shai uses embedded defaults that provide:
+**Configuration is optional!** If no config file exists, Shai uses [embedded defaults](https://github.com/colony-2/shai/blob/main/internal/shai/runtime/config/shai.default.yaml) that provide:
 - Common package registries (npm, PyPI, etc.)
 - Open-source container registries
 - Basic network allowlist
@@ -41,7 +41,7 @@ shai --config /path/to/custom-config.yaml
 ## Loading Behavior
 
 1. Check for `.shai/config.yaml`
-2. If not found, use embedded defaults
+2. If not found, use [embedded defaults](https://github.com/colony-2/shai/blob/main/internal/shai/runtime/config/shai.default.yaml)
 3. If found, load and validate
 4. Fail if config is invalid
 

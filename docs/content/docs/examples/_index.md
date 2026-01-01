@@ -29,7 +29,7 @@ apply:
 ```
 
 ```bash
-shai -rw frontend/src -- claude-code
+shai -rw frontend/src -- claude
 ```
 
 ### Backend API
@@ -103,10 +103,10 @@ apply:
 
 ```bash
 # Basic usage
-shai -rw src -- claude-code --dangerously-bypass-approvals-and-sandbox
+shai -rw src -- claude --dangerously-bypass-approvals-and-sandbox
 
 # With specific component
-shai -rw src/components/Auth -- claude-code --dangerously-bypass-approvals-and-sandbox
+shai -rw src/components/Auth -- claude --dangerously-bypass-approvals-and-sandbox
 ```
 
 ### Codex

@@ -32,7 +32,7 @@ Choose your preferred installation method:
 ### Verify Installation
 
 ```bash
-shai --version
+shai version
 ```
 
 You should see the version number printed to the console.
@@ -113,12 +113,12 @@ The real power of Shai comes from running AI agents inside the sandbox.
 ### Launch an Agent After Bootstrap
 
 ```bash
-shai -rw src/auth -- claude-code --dangerously-bypass-approvals-and-sandbox
+shai -rw src/auth -- claude --dangerously-bypass-approvals-and-sandbox
 ```
 
 **What this does:**
 1. Creates a sandbox with `src/auth` writable
-2. After sandbox setup completes, launches `claude-code`
+2. After sandbox setup completes, launches `claude`
 3. The agent runs inside the controlled environment
 
 ### Without a Command
@@ -128,13 +128,13 @@ If you don't specify a command after `--`, Shai drops you into an interactive sh
 ```bash
 shai -rw src/components
 # Now inside sandbox
-claude-code
+claude
 ```
 
 {{< callout type="info" >}}
 **Why `--dangerously-bypass-approvals-and-sandbox`?**
 
-Many AI agents have their own sandboxing. When running inside Shai, you can disable the agent's built-in sandbox since Shai provides superior isolation that is consistent across agents.
+Many AI agents have their own pseudo-sandboxing. When running inside Shai, you can disable the agent's built-in sandbox since Shai provides superior isolation that is consistent across agents.
 {{< /callout >}}
 
 ## Common Workflows
@@ -142,7 +142,7 @@ Many AI agents have their own sandboxing. When running inside Shai, you can disa
 ### Frontend Development
 
 ```bash
-shai -rw src -rw public -- claude-code
+shai -rw src -rw public -- claude
 ```
 
 ### Backend Development

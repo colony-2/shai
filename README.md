@@ -76,7 +76,7 @@ shai generate
 ```
 This creates `.shai/config.yaml` with sensible defaults. You can also rely on the embedded default config if no custom configuration is needed.
 
-Shai automatically loads `<workspace>/.shai/config.yaml` unless `--config` overrides it. Missing configs fall back to the embedded default, which primarily enables a permissive HTTP allow-list and open-source registries.
+Shai automatically loads `<workspace>/.shai/config.yaml` unless `--config` overrides it. Missing configs fall back to the [embedded default config](https://github.com/colony-2/shai/blob/main/internal/shai/runtime/config/shai.default.yaml), which primarily enables a permissive HTTP allow-list and open-source registries.
 
 ### Top-level keys
 | Key | Required | Description |

@@ -299,7 +299,7 @@ Warning: Running outside of sandbox
 Use the bypass flag since Shai provides sandboxing:
 
 ```bash
-shai -rw src -- claude-code --dangerously-bypass-approvals-and-sandbox
+shai -rw src -- claude --dangerously-bypass-approvals-and-sandbox
 ```
 
 ### Agent Can't Install Packages

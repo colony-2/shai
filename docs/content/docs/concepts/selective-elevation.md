@@ -30,7 +30,7 @@ Simply giving the container host access defeats the purpose of sandboxing. Selec
 │         Container (Sandbox)         │
 │                                     │
 │  Agent runs:                        │
-│  $ shai-remote deploy-staging         │
+│  $ shai-remote call deploy-staging  │
 │              │                      │
 └──────────────┼──────────────────────┘
                │
@@ -76,10 +76,10 @@ Inside the sandbox, use the `shai-remote` command:
 
 ```bash
 # No arguments
-shai-remote run-integration-tests
+shai-remote call run-integration-tests
 
 # With arguments (validated against allowed-args regex)
-shai-remote deploy-staging --env=staging
+shai-remote call deploy-staging --env=staging
 ```
 
 The command runs on the **host**, and output is streamed back to the container.
@@ -101,10 +101,10 @@ calls:
 ```
 
 **What this does:**
-- Allows: `shai-remote flash-device --port=/dev/ttyUSB0` ✅
-- Allows: `shai-remote flash-device --port=/dev/ttyUSB1` ✅
-- Blocks: `shai-remote flash-device --port=/dev/sda` ❌
-- Blocks: `shai-remote flash-device --rm -rf /` ❌
+- Allows: `shai-remote call flash-device --port=/dev/ttyUSB0` ✅
+- Allows: `shai-remote call flash-device --port=/dev/ttyUSB1` ✅
+- Blocks: `shai-remote call flash-device --port=/dev/sda` ❌
+- Blocks: `shai-remote call flash-device --rm -rf /` ❌
 
 {{< callout type="warning" >}}
 **Always use argument filtering** unless the call takes no arguments. This prevents agents from injecting malicious commands.
@@ -124,14 +124,14 @@ calls:
 
 Valid:
 ```bash
-shai-remote deploy --env=staging --region=us-east-1
-shai-remote deploy --env=production --region=us-west-2
+shai-remote call deploy --env=staging --region=us-east-1
+shai-remote call deploy --env=production --region=us-west-2
 ```
 
 Invalid:
 ```bash
-shai-remote deploy --env=dev --region=us-east-1      # env=dev not allowed
-shai-remote deploy --env=staging                     # missing --region
+shai-remote call deploy --env=dev --region=us-east-1      # env=dev not allowed
+shai-remote call deploy --env=staging                     # missing --region
 ```
 
 ### No Argument Validation
@@ -163,7 +163,7 @@ resources:
 Agent workflow:
 1. Compile firmware inside sandbox
 2. Copy binary to `/tmp/firmware-xyz.bin`
-3. `shai-remote flash-firmware --device=/dev/ttyUSB0 --binary=/tmp/firmware-xyz.bin`
+3. `shai-remote call flash-firmware --device=/dev/ttyUSB0 --binary=/tmp/firmware-xyz.bin`
 
 ### Deployment Verification
 
@@ -179,7 +179,7 @@ resources:
 
 Agent workflow:
 1. Deploy code (via other means)
-2. `shai-remote verify-deployment --service=api --env=staging`
+2. `shai-remote call verify-deployment --service=api --env=staging`
 3. Check exit code to confirm deployment
 
 ### Secret Fetching
@@ -283,7 +283,7 @@ Manually test calls to verify behavior:
 ```bash
 shai -rw . --resource-set deployment
 # Inside sandbox:
-shai-remote deploy-staging --env=staging
+shai-remote call deploy-staging --env=staging
 ```
 
 ### Host Script Output
