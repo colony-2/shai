@@ -18,47 +18,87 @@ layout: hextra-home
   }
 </style>
 
-<div class="hx:grid hx:grid-cols-1 lg:hx:grid-cols-2 hx:gap-8 hx:items-start">
-  <div>
-    {{< hextra/hero-badge >}}
-      <div class="hx:w-2 hx:h-2 hx:rounded-full hx:bg-primary-400"></div>
-      <span>Free and open source</span>
-      {{< icon name="arrow-circle-right" attributes="height=14" >}}
-    {{< /hextra/hero-badge >}}
+<style>
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .hero-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+  .video-container-wrapper {
+    margin-top: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .video-container {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+  }
+}
+.video-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.video-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+</style>
 
-    <div class="hx:mt-6 hx:mb-6">
-    {{< hextra/hero-headline >}}
-      Sandboxing Shell&nbsp;<br class="hx:sm:block hx:hidden" />for AI Coding Agents
-    {{< /hextra/hero-headline >}}
-    </div>
+<div class="hero-grid">
+<div>
 
-    <div>
-    {{< hextra/hero-subtitle >}}
-      Let AI agents run free... &nbsp;<br class="hx:sm:block hx:hidden" />without letting them <span class="rainbow-text">run wild</span>.
-    {{< /hextra/hero-subtitle >}}
-    </div>
+{{< hextra/hero-badge >}}
+  <div class="hx:w-2 hx:h-2 hx:rounded-full hx:bg-primary-400"></div>
+  <span>Free and open source</span>
+  {{< icon name="arrow-circle-right" attributes="height=14" >}}
+{{< /hextra/hero-badge >}}
 
-    ```bash {linenos=false}
-    npm install -g @colony2/shai
-    ```
+<div class="hx:mt-6 hx:mb-6">
+{{< hextra/hero-headline >}}
+  Sandboxing Shell&nbsp;<br class="hx:sm:block hx:hidden" />for AI Coding Agents
+{{< /hextra/hero-headline >}}
+</div>
 
-    <div class="hx:mb-6 hx:mt-6">
-    {{< hextra/hero-button text="Get Started" link="docs/quick-start" >}}
-    {{< hextra/hero-button text="View on GitHub" link="https://github.com/colony-2/shai" >}}
-    </div>
-  </div>
+<div>
+{{< hextra/hero-subtitle >}}
+  Let AI agents run free... &nbsp;<br class="hx:sm:block hx:hidden" />without letting them <span class="rainbow-text">run wild</span>.
+{{< /hextra/hero-subtitle >}}
+</div>
 
-  <div class="hx:mt-6 lg:hx:mt-0">
-    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
-      <iframe
-        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-        src="https://www.youtube.com/embed/9vdKrZoFQHo?autoplay=1&mute=1&loop=1&playlist=9vdKrZoFQHo"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen>
-      </iframe>
-    </div>
-  </div>
+```bash {linenos=false}
+npm install -g @colony2/shai
+```
+
+<div class="hx:mb-6 hx:mt-6">
+{{< hextra/hero-button text="Get Started" link="docs/quick-start" >}}
+{{< hextra/hero-button text="View on GitHub" link="https://github.com/colony-2/shai" >}}
+</div>
+
+</div>
+<div class="video-container-wrapper" style="margin-top: 1.5rem;">
+
+<div class="video-container">
+<iframe
+  src="https://www.youtube.com/embed/9vdKrZoFQHo?autoplay=1&mute=1&loop=1&playlist=9vdKrZoFQHo"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen>
+</iframe>
+</div>
+
+</div>
 </div>
 
 <div class="hx:mt-6"></div>
