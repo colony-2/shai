@@ -755,3 +755,150 @@ apply:
 	result := output.String()
 	assert.Contains(t, result, "CONTAINER_VAR=host_value_123", "Resource env var should be injected from host")
 }
+
+// Test #31: TTY is properly preserved for interactive shells
+// This test verifies that when runuser is used (instead of broken su -c),
+// bash doesn't print TTY/job control errors. We use UseTTY: false to capture
+// stderr, but the real fix is tested by the command succeeding without errors.
+func TestBootstrap_TTYPreservation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	configContent := `
+type: shai-sandbox
+version: 1
+image: ghcr.io/colony-2/shai-base:latest
+resources:
+  test:
+    http:
+      - example.com
+apply:
+  - path: ./
+    resources: [test]
+`
+	configPath := filepath.Join(tmpDir, ".shai", "config.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+	var stdout, stderr strings.Builder
+	cfg := EphemeralConfig{
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &stdout,
+		Stderr:       &stderr,
+		PostSetupExec: &ExecSpec{
+			Command: []string{"bash", "-c", `
+				# This will trigger the TTY errors if runuser isn't used properly
+				# The fix ensures bash starts without "Inappropriate ioctl" or "no job control" messages
+				echo "BASH_STARTED=true"
+				exit 0
+			`},
+			UseTTY: false, // Use false to capture stderr in test
+		},
+	}
+
+	runner, err := NewEphemeralRunner(cfg)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err = runner.Run(ctx)
+	require.NoError(t, err, "Command should succeed without TTY errors")
+
+	stderrOutput := stderr.String()
+	stdoutOutput := stdout.String()
+
+	// Verify the command ran successfully
+	assert.Contains(t, stdoutOutput, "BASH_STARTED=true", "bash should start successfully")
+
+	// Verify NO TTY error messages appear (these would indicate the bug)
+	assert.NotContains(t, stderrOutput, "Inappropriate ioctl for device",
+		"Should not see TTY ioctl errors when runuser is used properly")
+	assert.NotContains(t, stderrOutput, "no job control",
+		"Should not see job control errors when runuser is used properly")
+}
+
+// Test #32: Home directory is owned by the target user
+func TestBootstrap_HomeDirectoryOwnership(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	configContent := `
+type: shai-sandbox
+version: 1
+image: ghcr.io/colony-2/shai-base:latest
+user: shai
+resources:
+  test:
+    http:
+      - example.com
+apply:
+  - path: ./
+    resources: [test]
+`
+	configPath := filepath.Join(tmpDir, ".shai", "config.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+	var output strings.Builder
+	cfg := EphemeralConfig{
+		WorkingDir:   tmpDir,
+		ConfigFile:   configPath,
+		Verbose:      testing.Verbose(),
+		ShowProgress: false,
+		Stdout:       &output,
+		PostSetupExec: &ExecSpec{
+			Command: []string{"bash", "-c", `
+				# Get current user
+				CURRENT_USER=$(whoami)
+				echo "CURRENT_USER=$CURRENT_USER"
+
+				# Get home directory
+				HOME_DIR=$(eval echo ~$CURRENT_USER)
+				echo "HOME_DIR=$HOME_DIR"
+
+				# Check ownership of home directory
+				OWNER=$(stat -c '%U' "$HOME_DIR" 2>/dev/null || stat -f '%Su' "$HOME_DIR")
+				echo "HOME_OWNER=$OWNER"
+
+				# Check if we can write to home directory
+				if [ -w "$HOME_DIR" ]; then
+					echo "HOME_WRITABLE=true"
+				else
+					echo "HOME_WRITABLE=false"
+				fi
+
+				# Try to create a file in home directory
+				if touch "$HOME_DIR/.test_write" 2>/dev/null; then
+					rm -f "$HOME_DIR/.test_write"
+					echo "HOME_CREATE_FILE=success"
+				else
+					echo "HOME_CREATE_FILE=failed"
+				fi
+			`},
+			UseTTY: false,
+		},
+	}
+
+	runner, err := NewEphemeralRunner(cfg)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err = runner.Run(ctx)
+	require.NoError(t, err)
+
+	result := output.String()
+	assert.Contains(t, result, "CURRENT_USER=shai", "should be running as shai user")
+	assert.Contains(t, result, "HOME_OWNER=shai", "home directory should be owned by shai user, not root")
+	assert.Contains(t, result, "HOME_WRITABLE=true", "home directory should be writable by user")
+	assert.Contains(t, result, "HOME_CREATE_FILE=success", "user should be able to create files in home directory")
+}

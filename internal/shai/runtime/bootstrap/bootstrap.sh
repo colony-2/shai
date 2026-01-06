@@ -621,7 +621,12 @@ ensure_group_with_gid() {
     name="shai-${gid}"
   fi
 
-  if groupadd -g "$gid" "$name"; then
+  # Suppress GID range warnings since we intentionally use host GID
+  err_output=$(groupadd -g "$gid" "$name" 2>&1)
+  status=$?
+  # Show errors except UID/GID range warnings (grep returns 1 if all lines filtered, so use || true)
+  echo "$err_output" | grep -vE "warning:.*outside of the (UID|GID)_MIN.*_MAX.*range" >&2 || true
+  if [ $status -eq 0 ]; then
     printf '%s\n' "$name"
     return
   fi
@@ -685,11 +690,13 @@ reconcile_target_user() {
         args+=(-g "$primary_group")
       fi
       args+=(-d "$home_dir" -s /bin/bash)
-      if ! useradd "${args[@]}" "$TARGET_USER"; then
+      # Suppress UID range warnings since we intentionally use host UID
+      err_output=$(useradd "${args[@]}" "$TARGET_USER" 2>&1)
+      status=$?
+      # Show errors except UID/GID range warnings (grep returns 1 if all lines filtered, so use || true)
+      echo "$err_output" | grep -vE "warning:.*outside of the (UID|GID)_MIN.*_MAX.*range" >&2 || true
+      if [ $status -ne 0 ]; then
         die "failed to create user $TARGET_USER"
-      fi
-      if [ -d "$home_dir" ]; then
-        chown -R "$TARGET_USER:$TARGET_USER" "$home_dir" 2>/dev/null || true
       fi
     fi
   else
@@ -724,6 +731,17 @@ reconcile_target_user() {
       die "failed to update primary group for $TARGET_USER to gid $requested_gid"
     fi
     DEV_GID=$(id -g "$TARGET_USER")
+  fi
+
+  # Ensure home directory ownership is correct after any user/group changes
+  # Note: Not recursive to avoid failures on read-only mounted subdirectories
+  local user_home
+  user_home=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+  if [ -n "$user_home" ] && [ -d "$user_home" ]; then
+    # Use "user:" syntax to set user and their primary group (not "user:user")
+    if ! chown "$TARGET_USER:" "$user_home"; then
+      die "failed to set ownership of $user_home to $TARGET_USER (uid=$DEV_UID, gid=$DEV_GID)"
+    fi
   fi
 
   export TARGET_USER
@@ -918,15 +936,10 @@ EOF
   printf '%s\n' "$summary_message"
 
   if [ "$IS_ROOT" -eq 1 ]; then
-    if command -v su >/dev/null 2>&1; then
-      cmd=$(printf '%q ' "${argv[@]}")
-      cmd=${cmd% }
-      exec su -p "$TARGET_USER" -c "$cmd"
-    elif command -v runuser >/dev/null 2>&1; then
-      exec runuser -u "$TARGET_USER" --preserve-environment -- "${argv[@]}"
-    else
-      die "unable to switch user (runuser/su missing)"
+    if ! command -v runuser >/dev/null 2>&1; then
+      die "runuser not found (required from util-linux package)"
     fi
+    exec runuser -u "$TARGET_USER" -- "${argv[@]}"
   else
     if [ "${EUID:-$(id -u)}" -ne "$DEV_UID" ]; then
       die "bootstrap not running as $TARGET_USER and cannot switch users"
@@ -936,3 +949,4 @@ EOF
 }
 
 main
+  
