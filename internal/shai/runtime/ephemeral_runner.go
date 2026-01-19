@@ -42,6 +42,8 @@ type EphemeralConfig struct {
 	TemplateVars        map[string]string
 	ReadWritePaths      []string
 	ResourceSets        []string
+	PrependResourceSet  *configpkg.ResourceSet
+	AppendResourceSet   *configpkg.ResourceSet
 	Verbose             bool
 	PostSetupExec       *ExecSpec
 	Stdout              io.Writer
@@ -53,6 +55,7 @@ type EphemeralConfig struct {
 	HostGID             string
 	Privileged          bool
 	ShowProgress        bool
+	ShowScriptOutput    bool
 }
 
 // ExecSpec describes a command to run post-setup.
@@ -139,7 +142,7 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 	workspace := effectiveWorkspace(shaiCfg.Workspace, mountBuilder.ReadWritePaths)
 	shaiCfg.Workspace = workspace
 
-	resources, resourceNames, applyImageOverride, err := resolvedResources(shaiCfg, mountBuilder.ReadWritePaths, cfg.ResourceSets)
+	resources, resourceNames, applyImageOverride, err := resolvedResources(shaiCfg, mountBuilder.ReadWritePaths, cfg.ResourceSets, cfg.PrependResourceSet, cfg.AppendResourceSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve resources: %w", err)
 	}
@@ -340,7 +343,12 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 		errCh <- err
 	}()
 
-	startMarker := r.buildStartMarker()
+	startMarker := ""
+	if r.config.ShowScriptOutput {
+		startMarker = r.buildStartMarker()
+	} else if ctrlFilter != nil {
+		ctrlFilter.Enable()
+	}
 
 	if interactiveTTY {
 		writer := newExecStartDetector(os.Stdout, startMarker, enableCtrlC)
@@ -446,6 +454,11 @@ func (r *EphemeralRunner) buildDockerConfigs(useTTY bool, containerName string) 
 	env := []string{}
 	if r.config.Verbose {
 		env = append(env, "SHAI_VERBOSE=1")
+	}
+	if r.config.ShowScriptOutput {
+		env = append(env, "SHAI_SCRIPT_OUTPUT=1")
+	} else {
+		env = append(env, "SHAI_SCRIPT_OUTPUT=0")
 	}
 	if r.aliasSvc != nil {
 		env = append(env, r.aliasSvc.Env()...)
@@ -628,7 +641,7 @@ func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 	}
 
 	// Print warning about skipped mounts
-	if len(skippedMounts) > 0 {
+	if len(skippedMounts) > 0 && r.config.ShowScriptOutput {
 		fmt.Fprintf(os.Stderr, "Warning: Skipped %d missing resource mount(s):\n", len(skippedMounts))
 		for _, sm := range skippedMounts {
 			fmt.Fprintf(os.Stderr, "  - %s\n", sm)

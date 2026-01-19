@@ -72,11 +72,59 @@ apply:
     resources: [base]
 `)
 
-	resources, names, image, err := resolvedResources(cfg, []string{"."}, []string{"opt", "base", "another"})
+	resources, names, image, err := resolvedResources(cfg, []string{"."}, []string{"opt", "base", "another"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"opt", "base", "another"}, names)
 	require.Len(t, resources, 3)
 	assert.Equal(t, "", image)
+}
+
+func TestResolvedResourcesWithAppendSet(t *testing.T) {
+	cfg := loadTestConfig(t, `
+type: shai-sandbox
+version: 1
+image: example
+user: dev
+workspace: /src
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources: [base]
+`)
+
+	appendSet := &config.ResourceSet{
+		HTTP: []string{"example.com"},
+	}
+	resources, names, _, err := resolvedResources(cfg, []string{"."}, []string{"base"}, nil, appendSet)
+	require.NoError(t, err)
+	require.Equal(t, []string{"base"}, names)
+	require.Len(t, resources, 2)
+	assert.Equal(t, []string{"example.com"}, resources[1].Spec.HTTP)
+}
+
+func TestResolvedResourcesWithPrependSet(t *testing.T) {
+	cfg := loadTestConfig(t, `
+type: shai-sandbox
+version: 1
+image: example
+user: dev
+workspace: /src
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources: [base]
+`)
+
+	prependSet := &config.ResourceSet{
+		HTTP: []string{"prepend.example"},
+	}
+	resources, names, _, err := resolvedResources(cfg, []string{"."}, []string{"base"}, prependSet, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"base"}, names)
+	require.Len(t, resources, 2)
+	assert.Equal(t, []string{"prepend.example"}, resources[0].Spec.HTTP)
 }
 
 func TestResolvedResourcesUnknownSet(t *testing.T) {
@@ -93,7 +141,7 @@ apply:
     resources: [base]
 `)
 
-	_, _, _, err := resolvedResources(cfg, []string{"."}, []string{"missing", "base"})
+	_, _, _, err := resolvedResources(cfg, []string{"."}, []string{"missing", "base"}, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing")
 }
@@ -118,11 +166,11 @@ apply:
     image: bar-image
 `)
 
-	_, _, image, err := resolvedResources(cfg, []string{"bar", "foo"}, nil)
+	_, _, image, err := resolvedResources(cfg, []string{"bar", "foo"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "bar-image", image)
 
-	_, _, image, err = resolvedResources(cfg, []string{"foo", "bar"}, nil)
+	_, _, image, err = resolvedResources(cfg, []string{"foo", "bar"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "foo-image", image)
 }
@@ -147,11 +195,11 @@ apply:
     image: baz-image
 `)
 
-	_, _, image, err := resolvedResources(cfg, []string{"bar/baz"}, nil)
+	_, _, image, err := resolvedResources(cfg, []string{"bar/baz"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "baz-image", image)
 
-	_, _, image, err = resolvedResources(cfg, []string{"bar/qux"}, nil)
+	_, _, image, err = resolvedResources(cfg, []string{"bar/qux"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "bar-image", image)
 }

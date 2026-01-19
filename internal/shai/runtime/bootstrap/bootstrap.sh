@@ -2,6 +2,7 @@
 set -euo pipefail
 
 VERBOSE=0
+SCRIPT_OUTPUT=1
 
 BOOT_SRC_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SHAI_CONF_DIR=${SHAI_CONF_DIR:-$BOOT_SRC_DIR/conf}
@@ -30,6 +31,10 @@ TINYPROXY_STDERR_LOG="$TINYPROXY_LOG_DIR/tinyproxy.err.log"
 DNSMASQ_STDOUT_LOG="$DNSMASQ_LOG_DIR/dnsmasq.out.log"
 DNSMASQ_STDERR_LOG="$DNSMASQ_LOG_DIR/dnsmasq.err.log"
 
+if [ "${SHAI_SCRIPT_OUTPUT:-1}" = "0" ]; then
+  SCRIPT_OUTPUT=0
+fi
+
 timestamp() {
   date -Iseconds
 }
@@ -39,13 +44,13 @@ log() {
 }
 
 log_verbose() {
-  if [ "$VERBOSE" -eq 1 ]; then
+  if [ "$VERBOSE" -eq 1 ] && [ "$SCRIPT_OUTPUT" -eq 1 ]; then
     log "$@"
   fi
 }
 
 debug() {
-  if [ "${SHAI_VERBOSE:-}" = "1" ]; then
+  if [ "${SHAI_VERBOSE:-}" = "1" ] && [ "$SCRIPT_OUTPUT" -eq 1 ]; then
     log "$@"
   fi
 }
@@ -190,7 +195,7 @@ install_alias_script() {
 on_exit() {
   if [ "$VERBOSE" -eq 1 ]; then
     status=$?
-    log "bootstrap exiting with status $status"
+    log_verbose "bootstrap exiting with status $status"
   fi
 }
 
@@ -933,7 +938,9 @@ EOF
   image_desc=${IMAGE_NAME:-unknown}
   summary_message="Shai sandbox started using [$image_desc] as user [$TARGET_USER]. Resource sets: [$resource_summary]"
 
-  printf '%s\n' "$summary_message"
+  if [ "$SCRIPT_OUTPUT" -eq 1 ]; then
+    printf '%s\n' "$summary_message"
+  fi
 
   if [ "$IS_ROOT" -eq 1 ]; then
     if ! command -v runuser >/dev/null 2>&1; then

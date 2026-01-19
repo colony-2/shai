@@ -474,8 +474,9 @@ func TestCtrlCEnabledAfterBootstrapMarker(t *testing.T) {
 
 	// Create runner with a command that will wait for input
 	runner, err := shai.NewEphemeralRunner(shai.EphemeralConfig{
-		WorkingDir: tmpDir,
-		Verbose:    false,
+		WorkingDir:       tmpDir,
+		Verbose:          false,
+		ShowScriptOutput: true,
 		PostSetupExec: &shai.ExecSpec{
 			Command: []string{"sh", "-c", "echo 'ready'; read line; echo \"got: $line\""},
 			Workdir: "/src",

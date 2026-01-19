@@ -49,7 +49,11 @@ func NewSandbox(cfg SandboxConfig) (Sandbox, error) {
 	if err := cfg.normalize(); err != nil {
 		return nil, err
 	}
-	runner, err := runtimepkg.NewEphemeralRunner(cfg.runtimeConfig())
+	rc, err := cfg.runtimeConfig()
+	if err != nil {
+		return nil, err
+	}
+	runner, err := runtimepkg.NewEphemeralRunner(rc)
 	if err != nil {
 		return nil, err
 	}

@@ -166,17 +166,18 @@ func normalizeLegacyArgs(args []string) []string {
 
 func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verbose bool, postExec *shai.SandboxExec, configPath string, vars map[string]string, resourceSets []string, imageOverride, userOverride string, privileged bool) error {
 	sandbox, err := shai.NewSandbox(shai.SandboxConfig{
-		WorkingDir:     workingDir,
-		ConfigFile:     configPath,
-		TemplateVars:   vars,
-		ReadWritePaths: rwPaths,
-		ResourceSets:   resourceSets,
-		Verbose:        verbose,
-		PostSetupExec:  postExec,
-		ImageOverride:  imageOverride,
-		UserOverride:   userOverride,
-		Privileged:     privileged,
-		ShowProgress:   true,
+		WorkingDir:       workingDir,
+		ConfigFile:       configPath,
+		TemplateVars:     vars,
+		ReadWritePaths:   rwPaths,
+		ResourceSets:     resourceSets,
+		Verbose:          verbose,
+		PostSetupExec:    postExec,
+		ImageOverride:    imageOverride,
+		UserOverride:     userOverride,
+		Privileged:       privileged,
+		ShowProgress:     true,
+		ShowScriptOutput: true,
 	})
 	if err != nil {
 		return err

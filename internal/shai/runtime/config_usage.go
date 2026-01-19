@@ -8,18 +8,28 @@ import (
 	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 )
 
-func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []string) ([]*configpkg.ResolvedResource, []string, string, error) {
+func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []string, prependSet *configpkg.ResourceSet, appendSet *configpkg.ResourceSet) ([]*configpkg.ResolvedResource, []string, string, error) {
 	if cfg == nil {
 		return nil, nil, "", nil
+	}
+	if err := configpkg.NormalizeResourceSet(prependSet, "prepend"); err != nil {
+		return nil, nil, "", err
+	}
+	if err := configpkg.NormalizeResourceSet(appendSet, "append"); err != nil {
+		return nil, nil, "", err
 	}
 	orderedPaths := orderedResourcePaths(rwPaths)
 	base := cfg.ResolveResources(orderedPaths)
 	image := selectImageOverride(cfg, orderedPaths)
 
-	combined := make([]*configpkg.ResolvedResource, 0, len(extraSets)+len(base))
+	combined := make([]*configpkg.ResolvedResource, 0, len(extraSets)+len(base)+2)
 	names := make([]string, 0, len(extraSets)+len(base))
 	seen := make(map[string]bool)
 	var missing []string
+
+	if prependSet != nil {
+		combined = append(combined, &configpkg.ResolvedResource{Name: "", Spec: prependSet})
+	}
 
 	for _, setName := range extraSets {
 		name := strings.TrimSpace(setName)
@@ -52,6 +62,10 @@ func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []stri
 		combined = append(combined, res)
 		names = append(names, res.Name)
 		seen[res.Name] = true
+	}
+
+	if appendSet != nil {
+		combined = append(combined, &configpkg.ResolvedResource{Name: "", Spec: appendSet})
 	}
 	return combined, names, image, nil
 }

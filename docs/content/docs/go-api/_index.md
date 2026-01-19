@@ -67,11 +67,14 @@ type SandboxConfig struct {
     ConfigPath      string              // Path to .shai/config.yaml
     ReadWritePaths  []string            // Paths to mount as writable
     ResourceSets    []string            // Additional resource sets
+    PrependResourceSet *ResourceSet     // Extra resources prepended to resolved sets
+    AppendResourceSet  *ResourceSet     // Extra resources appended to resolved sets
     TemplateVars    map[string]string   // Template variables
     PostSetupExec   *SandboxExec        // Command to run
     ImageOverride   string              // Override image
     UserOverride    string              // Override user
     Verbose         bool                // Enable verbose output
+    ShowScriptOutput bool               // Enable bootstrap warnings/banner
 }
 ```
 
@@ -86,6 +89,22 @@ type SandboxExec struct {
     Workdir string            // Working directory
     UseTTY  bool              // Allocate TTY
 }
+
+### ResourceSet
+
+Inline resources you can prepend/append from the Go API:
+
+```go
+type ResourceSet struct {
+    Vars         []VarMapping
+    Mounts       []Mount
+    Calls        []Call
+    HTTP         []string
+    Ports        []Port
+    RootCommands []string
+    Options      ResourceOptions
+}
+```
 ```
 
 ### Sandbox Interface
@@ -119,6 +138,10 @@ type SandboxSession interface {
 cfg, _ := shai.LoadSandboxConfig(workspacePath,
     shai.WithReadWritePaths([]string{"coverage"}),
 )
+
+cfg.PrependResourceSet = &shai.ResourceSet{
+    HTTP: []string{"registry.npmjs.org"},
+}
 
 cfg.PostSetupExec = &shai.SandboxExec{
     Command: []string{"go", "test", "./..."},

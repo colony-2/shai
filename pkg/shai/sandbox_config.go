@@ -8,6 +8,7 @@ import (
 	"time"
 
 	runtimepkg "github.com/colony-2/shai/internal/shai/runtime"
+	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 )
 
 // SandboxConfig describes how to launch a sandbox.
@@ -17,6 +18,8 @@ type SandboxConfig struct {
 	TemplateVars        map[string]string
 	ReadWritePaths      []string
 	ResourceSets        []string
+	PrependResourceSet  *ResourceSet
+	AppendResourceSet   *ResourceSet
 	Verbose             bool
 	PostSetupExec       *SandboxExec
 	Stdout              io.Writer
@@ -28,6 +31,7 @@ type SandboxConfig struct {
 	HostGID             string
 	Privileged          bool
 	ShowProgress        bool
+	ShowScriptOutput    bool
 }
 
 // SandboxExec describes a command to run inside the sandbox after setup.
@@ -75,6 +79,20 @@ func WithTemplateVars(vars map[string]string) SandboxConfigOption {
 func WithResourceSets(names []string) SandboxConfigOption {
 	return func(cfg *SandboxConfig) {
 		cfg.ResourceSets = names
+	}
+}
+
+// WithPrependResourceSet prepends a resource set before resolved resources.
+func WithPrependResourceSet(set *ResourceSet) SandboxConfigOption {
+	return func(cfg *SandboxConfig) {
+		cfg.PrependResourceSet = set
+	}
+}
+
+// WithAppendResourceSet appends a resource set after resolved resources.
+func WithAppendResourceSet(set *ResourceSet) SandboxConfigOption {
+	return func(cfg *SandboxConfig) {
+		cfg.AppendResourceSet = set
 	}
 }
 
@@ -127,15 +145,32 @@ func WithGracefulStopTimeout(d time.Duration) SandboxConfigOption {
 	}
 }
 
-func (cfg SandboxConfig) runtimeConfig() runtimepkg.EphemeralConfig {
+// WithShowScriptOutput toggles bootstrap script output (warnings/banner).
+func WithShowScriptOutput(enabled bool) SandboxConfigOption {
+	return func(cfg *SandboxConfig) {
+		cfg.ShowScriptOutput = enabled
+	}
+}
+
+func (cfg SandboxConfig) runtimeConfig() (runtimepkg.EphemeralConfig, error) {
 	normalized := cfg
 	_ = normalized.normalize()
+	prepend, err := convertResourceSet(normalized.PrependResourceSet, "prepend")
+	if err != nil {
+		return runtimepkg.EphemeralConfig{}, err
+	}
+	appendSet, err := convertResourceSet(normalized.AppendResourceSet, "append")
+	if err != nil {
+		return runtimepkg.EphemeralConfig{}, err
+	}
 	return runtimepkg.EphemeralConfig{
 		WorkingDir:          normalized.WorkingDir,
 		ConfigFile:          normalized.ConfigFile,
 		TemplateVars:        normalized.TemplateVars,
 		ReadWritePaths:      normalized.ReadWritePaths,
 		ResourceSets:        normalized.ResourceSets,
+		PrependResourceSet:  prepend,
+		AppendResourceSet:   appendSet,
 		Verbose:             normalized.Verbose,
 		PostSetupExec:       convertExec(normalized.PostSetupExec),
 		Stdout:              normalized.Stdout,
@@ -147,7 +182,8 @@ func (cfg SandboxConfig) runtimeConfig() runtimepkg.EphemeralConfig {
 		HostGID:             normalized.HostGID,
 		Privileged:          normalized.Privileged,
 		ShowProgress:        normalized.ShowProgress,
-	}
+		ShowScriptOutput:    normalized.ShowScriptOutput,
+	}, nil
 }
 
 func convertExec(exec *SandboxExec) *runtimepkg.ExecSpec {
@@ -160,6 +196,44 @@ func convertExec(exec *SandboxExec) *runtimepkg.ExecSpec {
 		Workdir: exec.Workdir,
 		UseTTY:  exec.UseTTY,
 	}
+}
+
+func convertResourceSet(set *ResourceSet, label string) (*configpkg.ResourceSet, error) {
+	if set == nil {
+		return nil, nil
+	}
+	out := &configpkg.ResourceSet{
+		Vars:         make([]configpkg.VarMapping, len(set.Vars)),
+		Mounts:       make([]configpkg.Mount, len(set.Mounts)),
+		Calls:        make([]configpkg.Call, len(set.Calls)),
+		HTTP:         append([]string{}, set.HTTP...),
+		Ports:        make([]configpkg.Port, len(set.Ports)),
+		RootCommands: append([]string{}, set.RootCommands...),
+		Options: configpkg.ResourceOptions{
+			Privileged: set.Options.Privileged,
+		},
+	}
+	for i, vm := range set.Vars {
+		out.Vars[i] = configpkg.VarMapping{Source: vm.Source, Target: vm.Target}
+	}
+	for i, m := range set.Mounts {
+		out.Mounts[i] = configpkg.Mount{Source: m.Source, Target: m.Target, Mode: m.Mode}
+	}
+	for i, c := range set.Calls {
+		out.Calls[i] = configpkg.Call{
+			Name:        c.Name,
+			Description: c.Description,
+			Command:     c.Command,
+			AllowedArgs: c.AllowedArgs,
+		}
+	}
+	for i, p := range set.Ports {
+		out.Ports[i] = configpkg.Port{Host: p.Host, Port: p.Port}
+	}
+	if err := configpkg.NormalizeResourceSet(out, label); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (cfg *SandboxConfig) normalize() error {
