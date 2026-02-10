@@ -64,6 +64,7 @@ RUN set -euxo pipefail \
        apt-utils ca-certificates curl wget gnupg gnupg2 dirmngr unzip xz-utils tar \
        git jq bash-completion iproute2 procps lsof htop net-tools psmisc tree rsync \
        bzip2 zip nano vim-tiny less lsb-release apt-transport-https dialog \
+       ripgrep \
        libc6 libgcc1 libkrb5-3 libgssapi-krb5-2 libstdc++6 zlib1g locales sudo \
        ncdu man-db strace manpages manpages-dev init-system-helpers libssl3 zsh iptables supervisor inotify-tools \
        build-essential pkg-config clang libclang-dev \

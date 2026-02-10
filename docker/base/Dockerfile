@@ -27,6 +27,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # - net-tools: Legacy network utilities (netstat)
 # - passwd: User management utilities (useradd, usermod, etc.)
 # - procps: Process utilities (ps, top, etc.)
+# - ripgrep: Fast recursive search
 # - sed: Stream editor for text processing
 # - supervisor: Process supervisor for background services
 # - tinyproxy: HTTP/HTTPS proxy for allow-listed traffic
@@ -46,6 +47,7 @@ RUN set -euxo pipefail \
        net-tools \
        passwd \
        procps \
+       ripgrep \
        sed \
        supervisor \
        tinyproxy \
