@@ -36,12 +36,16 @@ Shai (pronounced "shy") is a sandboxing tool for running CLI-based AI agents ins
 
    # override the Docker image explicitly
    shai -rw app/component1 --image ghcr.io/example/dev:latest
+
+   # force a specific image platform
+   shai -rw app/component1 --platform linux/amd64
    ```
 
 ### Useful flags
 - `--read-write, -rw <path>` (repeatable) – declare relative paths that receive writable overlays inside `/src`; omit to keep the workspace entirely read-only. Paths must exist or an error will be raised.
 - `--resource-set, -rs <name>` – opt into additional resource sets beyond the config's apply rules.
 - `--image, -i <image>` – override the container image; this takes precedence over apply-rule overrides.
+- `--platform <os/arch[/variant]>` – override the target image platform; this takes precedence over config and apply-rule platform selection.
 - `--user, -u <user>` – override the target container user; takes precedence over config file.
 - `--privileged` – run the container in privileged mode (can also be set per-resource-set).
 - `--var, -v KEY=value` – provide template variables consumed by `${{ vars.KEY }}` expressions.
@@ -63,7 +67,7 @@ It is often the case that coding agents should have access to different sets of 
 - Root Commands (optional commands run as root before user switch)
 
 ## Apply Rules
-Shai allows you to define a set of rules that define which resource sets and container images are applied to which target paths. This allows you to define a set of default resource sets that apply to all subdirectories, and then enhance them for specific subtrees. 
+Shai allows you to define a set of rules that define which resource sets, container images, and optional image platforms are applied to which target paths. This allows you to define a set of default resource sets that apply to all subdirectories, and then enhance them for specific subtrees.
 
 ## Selective Elevation - Calls
 Sometimes, agents need to perform operations that are outside the scope of their containerized environment. For example, an agent working on embedded firmware may need to be able to flash that code to a specific host-mounted development board. Shai allows you to define specific host-side commands that can be called from inside the container. These remote calls are defined in the `calls` section of a resource set.
@@ -84,10 +88,11 @@ Shai automatically loads `<workspace>/.shai/config.yaml` unless `--config` overr
 | `type` | yes | Must be `shai-sandbox`. Used for schema validation.
 | `version` | yes | Must be `1`. Future releases may bump this.
 | `image` | yes | Base container image. Can use templates.
+| `platform` | no | Default target image platform (for example `linux/amd64`). Can use templates and can be overridden with `--platform`.
 | `user` | no | Container user Shai switches to before running your command. Defaults to `shai`. Can be overridden with `--user` flag.
 | `workspace` | no | Absolute path of the repository inside the container. Defaults to `/src`.
 | `resources` | yes | Map of resource-set definitions (see below).
-| `apply` | yes | Ordered list that maps workspace paths to resource sets and optional image overrides.
+| `apply` | yes | Ordered list that maps workspace paths to resource sets and optional image/platform overrides.
 
 ### Resource sets
 ```yaml
@@ -133,12 +138,14 @@ apply:
   - path: agents/research
     resources: [my-tools, gpu-mount]
     image: ghcr.io/my-org/gpu:latest
+    platform: linux/amd64
 ```
 - `path` – Workspace-relative path that activates resource sets for itself and its subdirectories. `./` (or `.`) matches everything.
 - `resources` – Names of resource sets applied by this rule. Within a single path, resource-set calls must define unique `name` values.
 - `image` – Optional override that replaces the base image when Shai is invoked from the matching subtree. The root (`.`) rule cannot override the image; use more specific paths.
+- `platform` – Optional override that replaces the default target platform for the matching subtree. The root (`.`) rule cannot override the platform; use the top-level `platform` key instead.
 
-Rules are evaluated top to bottom. When resolving a workspace path, Shai aggregates all matching resource sets (deduplicated) and selects the most specific image override. CLI `--resource-set` flags append to the resolved list.
+Rules are evaluated top to bottom. When resolving a workspace path, Shai aggregates all matching resource sets (deduplicated) and selects the most specific image and platform overrides. CLI `--resource-set` flags append to the resolved list, while `--image` and `--platform` take precedence over config-based selection.
 
 ### Template expansion
 Any string field can embed:
@@ -157,6 +164,8 @@ Missing references cause config loading to fail so you catch mistakes early.
 type: shai-sandbox
 version: 1
 image: ghcr.io/colony-2/shai-mega
+# Optional: set when you need a non-default image platform
+platform: linux/amd64
 # user and workspace are optional - defaults are user: shai, workspace: /src
 resources:
   base-allowlist:
@@ -251,6 +260,7 @@ func runAgent(ctx context.Context, repoRoot string) error {
     cfg, err := shai.LoadSandboxConfig(repoRoot,
         shai.WithReadWritePaths([]string{"agents/cache"}),
         shai.WithResourceSets([]string{"gpu"}),
+        shai.WithPlatformOverride("linux/amd64"),
         shai.WithTemplateVars(map[string]string{"BRANCH": "main"}),
     )
     if err != nil {
@@ -270,7 +280,7 @@ func runAgent(ctx context.Context, repoRoot string) error {
 }
 ```
 Key types:
-- `SandboxConfig` – Describes the workspace, config path, read/write overlays, selected resource sets, template variables, optional exec command, log writers, verbosity, graceful stop timeout, and image overrides.
+- `SandboxConfig` – Describes the workspace, config path, read/write overlays, selected resource sets, template variables, optional exec command, log writers, verbosity, graceful stop timeout, and image/platform overrides.
 - `SandboxExec` – Encapsulates the post-setup command (`Command`, env map, `Workdir`, `UseTTY`).
 - `Sandbox` – Interface with `Run`, `Start`, and `Close`. `Start` returns a `SandboxSession` with `ContainerID`, `Wait`, `Stop`, and `Close` helpers for supervising long-running jobs.
 

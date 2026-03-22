@@ -115,9 +115,9 @@ apply:
 
 All matching `backend` rules are applied: `[base, api-tools, testing]`
 
-## Image Overrides
+## Image and Platform Overrides
 
-Apply rules can also override the container image:
+Apply rules can also override the container image and target platform:
 
 ```yaml
 apply:
@@ -128,38 +128,39 @@ apply:
   - path: infrastructure
     resources: [deployment-tools]
     image: ghcr.io/my-org/devops:latest
+    platform: linux/amd64
 
   - path: ml-training
     resources: [gpu-access]
     image: ghcr.io/my-org/pytorch-gpu:latest
+    platform: linux/amd64
 ```
 
-When you run `shai -rw infrastructure/terraform`, it uses the `devops:latest` image instead of the default.
+When you run `shai -rw infrastructure/terraform`, it uses the `devops:latest` image on `linux/amd64` instead of the defaults.
 
-### Image Override Rules
+### Override Rules
 
-1. **More specific paths take precedence:**
+1. **More specific paths take precedence for both image and platform:**
    ```yaml
    apply:
-     - path: ./
-       image: ghcr.io/colony-2/shai-mega
-
      - path: backend/payments
        image: ghcr.io/my-org/payments-dev:latest
+       platform: linux/amd64
    ```
-   Running `shai -rw backend/payments` uses `payments-dev:latest`.
+   Running `shai -rw backend/payments` uses `payments-dev:latest` on `linux/amd64`.
 
-2. **Root path (`.` or `./`) cannot override the image:**
+2. **Root path (`.` or `./`) cannot override image or platform:**
    ```yaml
    apply:
      - path: ./
-       image: foo:latest    # ❌ Ignored! Use top-level `image` key instead
+       image: foo:latest        # ❌ Use top-level `image` instead
+       platform: linux/amd64    # ❌ Use top-level `platform` instead
    ```
 
-3. **CLI flag takes ultimate precedence:**
+3. **CLI flags take ultimate precedence:**
    ```bash
-   shai -rw infrastructure --image custom:latest
-   # Uses custom:latest regardless of config
+   shai -rw infrastructure --image custom:latest --platform linux/amd64
+   # Uses custom:latest on linux/amd64 regardless of config
    ```
 
 ## Path Syntax
@@ -301,6 +302,7 @@ Output shows:
 - Resolved resource sets
 - Final aggregated resources
 - Which image is selected
+- Which platform is selected
 
 ## Best Practices
 
@@ -316,7 +318,7 @@ Output shows:
 
 - Create conflicting rules that make resolution unclear
 - Over-specify rules for every single directory
-- Use image overrides on the root path
+- Use image or platform overrides on the root path
 - Assume rules are evaluated in a specific order (always think aggregation)
 
 ## Examples
@@ -347,6 +349,7 @@ apply:
   - path: infrastructure
     resources: [cloud-apis, k8s-access]
     image: ghcr.io/my-org/devops:latest
+    platform: linux/amd64
 ```
 
 ### ML Project
@@ -365,6 +368,7 @@ apply:
   - path: models
     resources: [gpu-access, wandb-api, model-registry]
     image: ghcr.io/my-org/pytorch-gpu:latest
+    platform: linux/amd64
 
   # Serving
   - path: serving

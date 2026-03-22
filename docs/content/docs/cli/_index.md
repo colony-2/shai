@@ -67,6 +67,17 @@ shai --image ghcr.io/my-org/custom:latest
 
 Takes precedence over config file and apply rules.
 
+### `--platform <os/arch[/variant]>`
+
+Override the target image platform.
+
+```bash
+shai --platform linux/amd64
+shai --platform linux/arm64/v8
+```
+
+Takes precedence over the top-level `platform` key and apply-rule platform overrides.
+
 ### `--user, -u <user>`
 
 Override the target container user.
@@ -192,6 +203,9 @@ shai -rw ml --resource-set gpu-access --resource-set wandb-api
 # Override image
 shai -rw src --image ghcr.io/my-org/dev:latest
 
+# Override platform
+shai -rw src --platform linux/amd64
+
 # Custom user
 shai -rw backend --user developer
 ```
@@ -304,6 +318,7 @@ shai -rw .  # Entire workspace writable
 # All flags together
 shai \
   --image custom:latest \
+  --platform linux/amd64 \
   --user dev \
   --resource-set tools \
   --var TAG=v1.0.0 \

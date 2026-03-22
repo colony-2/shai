@@ -23,6 +23,10 @@ version: 1
 # or shai-base for minimal footprint
 image: ghcr.io/colony-2/shai-mega
 
+# Optional: Default target platform (omit to use Docker's default)
+# Useful when you need amd64 images on ARM hosts, or vice versa
+platform: linux/arm64
+
 # Optional: Default user inside container (default: shai)
 # This user is created if it doesn't exist, with UID/GID matched to host user
 user: shai
@@ -299,6 +303,8 @@ apply:
       - ml-dev
     # Use GPU-enabled image for training
     image: ghcr.io/my-org/pytorch-gpu:latest
+    # Force the image platform for hosts that default differently
+    platform: linux/amd64
 
   - path: ml/inference
     resources:
@@ -424,6 +430,14 @@ Use a different image:
 
 ```bash
 shai -rw ml/training --image ghcr.io/my-org/custom:latest
+```
+
+### Override Platform
+
+Force a specific image platform:
+
+```bash
+shai -rw ml/training --platform linux/amd64
 ```
 
 ### Provide Variables
