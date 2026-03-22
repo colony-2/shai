@@ -72,11 +72,12 @@ apply:
     resources: [base]
 `)
 
-	resources, names, image, err := resolvedResources(cfg, []string{"."}, []string{"opt", "base", "another"}, nil, nil)
+	resources, names, image, platform, err := resolvedResources(cfg, []string{"."}, []string{"opt", "base", "another"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"opt", "base", "another"}, names)
 	require.Len(t, resources, 3)
 	assert.Equal(t, "", image)
+	assert.Equal(t, "", platform)
 }
 
 func TestResolvedResourcesWithAppendSet(t *testing.T) {
@@ -96,7 +97,7 @@ apply:
 	appendSet := &config.ResourceSet{
 		HTTP: []string{"example.com"},
 	}
-	resources, names, _, err := resolvedResources(cfg, []string{"."}, []string{"base"}, nil, appendSet)
+	resources, names, _, _, err := resolvedResources(cfg, []string{"."}, []string{"base"}, nil, appendSet)
 	require.NoError(t, err)
 	require.Equal(t, []string{"base"}, names)
 	require.Len(t, resources, 2)
@@ -120,7 +121,7 @@ apply:
 	prependSet := &config.ResourceSet{
 		HTTP: []string{"prepend.example"},
 	}
-	resources, names, _, err := resolvedResources(cfg, []string{"."}, []string{"base"}, prependSet, nil)
+	resources, names, _, _, err := resolvedResources(cfg, []string{"."}, []string{"base"}, prependSet, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"base"}, names)
 	require.Len(t, resources, 2)
@@ -141,7 +142,7 @@ apply:
     resources: [base]
 `)
 
-	_, _, _, err := resolvedResources(cfg, []string{"."}, []string{"missing", "base"}, nil, nil)
+	_, _, _, _, err := resolvedResources(cfg, []string{"."}, []string{"missing", "base"}, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing")
 }
@@ -166,11 +167,11 @@ apply:
     image: bar-image
 `)
 
-	_, _, image, err := resolvedResources(cfg, []string{"bar", "foo"}, nil, nil, nil)
+	_, _, image, _, err := resolvedResources(cfg, []string{"bar", "foo"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "bar-image", image)
 
-	_, _, image, err = resolvedResources(cfg, []string{"foo", "bar"}, nil, nil, nil)
+	_, _, image, _, err = resolvedResources(cfg, []string{"foo", "bar"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "foo-image", image)
 }
@@ -195,13 +196,72 @@ apply:
     image: baz-image
 `)
 
-	_, _, image, err := resolvedResources(cfg, []string{"bar/baz"}, nil, nil, nil)
+	_, _, image, _, err := resolvedResources(cfg, []string{"bar/baz"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "baz-image", image)
 
-	_, _, image, err = resolvedResources(cfg, []string{"bar/qux"}, nil, nil, nil)
+	_, _, image, _, err = resolvedResources(cfg, []string{"bar/qux"}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "bar-image", image)
+}
+
+func TestResolvedResourcesPlatformOverrideByOverlay(t *testing.T) {
+	cfg := loadTestConfig(t, `
+type: shai-sandbox
+version: 1
+image: example
+platform: linux/amd64
+user: dev
+workspace: /src
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources: [base]
+  - path: ./foo
+    resources: [base]
+    platform: linux/arm64
+  - path: ./bar
+    resources: [base]
+    platform: linux/arm/v7
+`)
+
+	_, _, _, platform, err := resolvedResources(cfg, []string{"bar", "foo"}, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "linux/arm/v7", platform)
+
+	_, _, _, platform, err = resolvedResources(cfg, []string{"foo", "bar"}, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "linux/arm64", platform)
+}
+
+func TestResolvedResourcesPlatformOverridePrefersSpecificPath(t *testing.T) {
+	cfg := loadTestConfig(t, `
+type: shai-sandbox
+version: 1
+image: example
+user: dev
+workspace: /src
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources: [base]
+  - path: ./bar
+    resources: [base]
+    platform: linux/arm64
+  - path: ./bar/baz
+    resources: [base]
+    platform: linux/arm/v7
+`)
+
+	_, _, _, platform, err := resolvedResources(cfg, []string{"bar/baz"}, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "linux/arm/v7", platform)
+
+	_, _, _, platform, err = resolvedResources(cfg, []string{"bar/qux"}, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "linux/arm64", platform)
 }
 
 func loadTestConfig(t *testing.T, contents string) *config.Config {

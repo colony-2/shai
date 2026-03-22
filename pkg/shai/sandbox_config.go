@@ -26,6 +26,7 @@ type SandboxConfig struct {
 	Stderr              io.Writer
 	GracefulStopTimeout time.Duration
 	ImageOverride       string
+	PlatformOverride    string
 	UserOverride        string
 	HostUID             string
 	HostGID             string
@@ -124,6 +125,13 @@ func WithImageOverride(image string) SandboxConfigOption {
 	}
 }
 
+// WithPlatformOverride forces a target image platform.
+func WithPlatformOverride(platform string) SandboxConfigOption {
+	return func(cfg *SandboxConfig) {
+		cfg.PlatformOverride = platform
+	}
+}
+
 // WithUserOverride forces a target user.
 func WithUserOverride(user string) SandboxConfigOption {
 	return func(cfg *SandboxConfig) {
@@ -177,6 +185,7 @@ func (cfg SandboxConfig) runtimeConfig() (runtimepkg.EphemeralConfig, error) {
 		Stderr:              normalized.Stderr,
 		GracefulStopTimeout: normalized.GracefulStopTimeout,
 		ImageOverride:       normalized.ImageOverride,
+		PlatformOverride:    normalized.PlatformOverride,
 		UserOverride:        normalized.UserOverride,
 		HostUID:             normalized.HostUID,
 		HostGID:             normalized.HostGID,

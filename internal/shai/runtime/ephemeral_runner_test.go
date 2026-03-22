@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
+	imagetypes "github.com/docker/docker/api/types/image"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -99,6 +101,76 @@ func TestChooseImagePrecedence(t *testing.T) {
 	img, src = chooseImage("base", "  ", "")
 	require.Equal(t, "base", img)
 	require.Equal(t, "", src)
+}
+
+func TestChoosePlatformPrecedence(t *testing.T) {
+	platform, src := choosePlatform("linux/amd64", "linux/arm64", "linux/arm/v7")
+	require.Equal(t, "linux/arm64", platform)
+	require.Equal(t, "cli", src)
+
+	platform, src = choosePlatform("linux/amd64", "", "linux/arm/v7")
+	require.Equal(t, "linux/arm/v7", platform)
+	require.Equal(t, "apply", src)
+
+	platform, src = choosePlatform("linux/amd64", "   ", "")
+	require.Equal(t, "linux/amd64", platform)
+	require.Equal(t, "config", src)
+
+	platform, src = choosePlatform("", "", "")
+	require.Equal(t, "", platform)
+	require.Equal(t, "", src)
+}
+
+func TestParsePlatform(t *testing.T) {
+	spec, err := parsePlatform("linux/arm64")
+	require.NoError(t, err)
+	require.Equal(t, &ocispec.Platform{OS: "linux", Architecture: "arm64"}, spec)
+
+	spec, err = parsePlatform("linux/arm/v7")
+	require.NoError(t, err)
+	require.Equal(t, &ocispec.Platform{OS: "linux", Architecture: "arm", Variant: "v7"}, spec)
+
+	spec, err = parsePlatform("")
+	require.NoError(t, err)
+	require.Nil(t, spec)
+
+	_, err = parsePlatform("linux")
+	require.Error(t, err)
+
+	_, err = parsePlatform("linux//arm64")
+	require.Error(t, err)
+}
+
+func TestImageMatchesPlatform(t *testing.T) {
+	match := imageMatchesPlatform(imagetypes.InspectResponse{
+		Os:           "linux",
+		Architecture: "arm64",
+		Variant:      "v8",
+	}, &ocispec.Platform{
+		OS:           "linux",
+		Architecture: "arm64",
+	})
+	require.True(t, match)
+
+	match = imageMatchesPlatform(imagetypes.InspectResponse{
+		Os:           "linux",
+		Architecture: "arm",
+		Variant:      "v7",
+	}, &ocispec.Platform{
+		OS:           "linux",
+		Architecture: "arm",
+		Variant:      "v7",
+	})
+	require.True(t, match)
+
+	match = imageMatchesPlatform(imagetypes.InspectResponse{
+		Os:           "linux",
+		Architecture: "amd64",
+	}, &ocispec.Platform{
+		OS:           "linux",
+		Architecture: "arm64",
+	})
+	require.False(t, match)
 }
 
 func TestResourceMountsSkipMissingPaths(t *testing.T) {

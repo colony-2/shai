@@ -21,8 +21,9 @@ func TestLoadSandboxConfigDefaults(t *testing.T) {
 
 func TestRuntimeConfigConversion(t *testing.T) {
 	cfg := SandboxConfig{
-		WorkingDir: "/workspace",
-		ConfigFile: "/workspace/" + DefaultConfigRelPath,
+		WorkingDir:       "/workspace",
+		ConfigFile:       "/workspace/" + DefaultConfigRelPath,
+		PlatformOverride: "linux/arm64",
 		ReadWritePaths: []string{
 			".",
 		},
@@ -63,6 +64,9 @@ func TestRuntimeConfigConversion(t *testing.T) {
 	}
 	if rc.AppendResourceSet == nil || len(rc.AppendResourceSet.HTTP) != 1 {
 		t.Fatalf("expected append resource set to be converted")
+	}
+	if rc.PlatformOverride != cfg.PlatformOverride {
+		t.Fatalf("platform override mismatch: %q != %q", rc.PlatformOverride, cfg.PlatformOverride)
 	}
 }
 

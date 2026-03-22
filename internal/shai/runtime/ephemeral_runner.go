@@ -33,6 +33,7 @@ import (
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/term"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // EphemeralConfig represents configuration for ephemeral container execution.
@@ -50,6 +51,7 @@ type EphemeralConfig struct {
 	Stderr              io.Writer
 	GracefulStopTimeout time.Duration
 	ImageOverride       string
+	PlatformOverride    string
 	UserOverride        string
 	HostUID             string
 	HostGID             string
@@ -73,6 +75,8 @@ type EphemeralRunner struct {
 	resources          []*configpkg.ResolvedResource
 	resourceNames      []string
 	image              string
+	platform           string
+	platformSpec       *ocispec.Platform
 	workspace          string
 	docker             *client.Client
 	mountBuilder       *MountBuilder
@@ -142,7 +146,7 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 	workspace := effectiveWorkspace(shaiCfg.Workspace, mountBuilder.ReadWritePaths)
 	shaiCfg.Workspace = workspace
 
-	resources, resourceNames, applyImageOverride, err := resolvedResources(shaiCfg, mountBuilder.ReadWritePaths, cfg.ResourceSets, cfg.PrependResourceSet, cfg.AppendResourceSet)
+	resources, resourceNames, applyImageOverride, applyPlatformOverride, err := resolvedResources(shaiCfg, mountBuilder.ReadWritePaths, cfg.ResourceSets, cfg.PrependResourceSet, cfg.AppendResourceSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve resources: %w", err)
 	}
@@ -166,12 +170,25 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 	}
 
 	image, imageSource := chooseImage(shaiCfg.Image, cfg.ImageOverride, applyImageOverride)
+	platform, platformSource := choosePlatform(shaiCfg.Platform, cfg.PlatformOverride, applyPlatformOverride)
+	platformSpec, err := parsePlatform(platform)
+	if err != nil {
+		return nil, fmt.Errorf("invalid platform %q: %w", platform, err)
+	}
 	if cfg.Verbose {
 		switch imageSource {
 		case "cli":
 			fmt.Fprintf(os.Stderr, "shai: using image override from flag: %s\n", image)
 		case "apply":
 			fmt.Fprintf(os.Stderr, "shai: using image override from apply rules: %s\n", image)
+		}
+		switch platformSource {
+		case "cli":
+			fmt.Fprintf(os.Stderr, "shai: using platform override from flag: %s\n", platform)
+		case "apply":
+			fmt.Fprintf(os.Stderr, "shai: using platform override from apply rules: %s\n", platform)
+		case "config":
+			fmt.Fprintf(os.Stderr, "shai: using platform from config: %s\n", platform)
 		}
 	}
 
@@ -181,6 +198,8 @@ func NewEphemeralRunner(cfg EphemeralConfig) (*EphemeralRunner, error) {
 		resources:      resources,
 		resourceNames:  resourceNames,
 		image:          image,
+		platform:       platform,
+		platformSpec:   platformSpec,
 		workspace:      workspace,
 		docker:         dockerClient,
 		mountBuilder:   mountBuilder,
@@ -283,7 +302,7 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 		return err
 	}
 
-	resp, err := r.docker.ContainerCreate(ctx, containerCfg, hostCfg, nil, nil, containerName)
+	resp, err := r.docker.ContainerCreate(ctx, containerCfg, hostCfg, nil, r.platformSpec, containerName)
 	if err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
@@ -652,10 +671,17 @@ func (r *EphemeralRunner) resourceMounts() ([]mount.Mount, error) {
 }
 
 func (r *EphemeralRunner) ensureImage(ctx context.Context, img string) error {
-	if _, _, err := r.docker.ImageInspectWithRaw(ctx, img); err == nil {
-		return nil
+	if inspect, _, err := r.docker.ImageInspectWithRaw(ctx, img); err == nil {
+		if r.platformSpec == nil || imageMatchesPlatform(inspect, r.platformSpec) {
+			return nil
+		}
 	}
-	reader, err := r.docker.ImagePull(ctx, img, imagetypes.PullOptions{})
+
+	pullOpts := imagetypes.PullOptions{}
+	if r.platform != "" {
+		pullOpts.Platform = r.platform
+	}
+	reader, err := r.docker.ImagePull(ctx, img, pullOpts)
 	if err != nil {
 		return fmt.Errorf("pull image %s: %w", img, err)
 	}
@@ -1077,6 +1103,61 @@ func chooseImage(defaultImage, cliOverride, applyOverride string) (string, strin
 		return img, "apply"
 	}
 	return defaultImage, ""
+}
+
+func choosePlatform(defaultPlatform, cliOverride, applyOverride string) (string, string) {
+	if platform := strings.TrimSpace(cliOverride); platform != "" {
+		return platform, "cli"
+	}
+	if platform := strings.TrimSpace(applyOverride); platform != "" {
+		return platform, "apply"
+	}
+	if platform := strings.TrimSpace(defaultPlatform); platform != "" {
+		return platform, "config"
+	}
+	return "", ""
+}
+
+func parsePlatform(platform string) (*ocispec.Platform, error) {
+	platform = strings.TrimSpace(platform)
+	if platform == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(platform, "/")
+	if len(parts) != 2 && len(parts) != 3 {
+		return nil, fmt.Errorf("expected os/arch or os/arch/variant")
+	}
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			return nil, fmt.Errorf("expected os/arch or os/arch/variant")
+		}
+	}
+
+	spec := &ocispec.Platform{
+		OS:           strings.ToLower(parts[0]),
+		Architecture: strings.ToLower(parts[1]),
+	}
+	if len(parts) == 3 {
+		spec.Variant = strings.ToLower(parts[2])
+	}
+	return spec, nil
+}
+
+func imageMatchesPlatform(inspect imagetypes.InspectResponse, platform *ocispec.Platform) bool {
+	if platform == nil {
+		return true
+	}
+	if !strings.EqualFold(strings.TrimSpace(inspect.Os), strings.TrimSpace(platform.OS)) {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(inspect.Architecture), strings.TrimSpace(platform.Architecture)) {
+		return false
+	}
+	if strings.TrimSpace(platform.Variant) == "" {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(inspect.Variant), strings.TrimSpace(platform.Variant))
 }
 
 // getDockerHostAddress returns the hostname/address that containers should use to reach the host.

@@ -8,19 +8,20 @@ import (
 	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
 )
 
-func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []string, prependSet *configpkg.ResourceSet, appendSet *configpkg.ResourceSet) ([]*configpkg.ResolvedResource, []string, string, error) {
+func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []string, prependSet *configpkg.ResourceSet, appendSet *configpkg.ResourceSet) ([]*configpkg.ResolvedResource, []string, string, string, error) {
 	if cfg == nil {
-		return nil, nil, "", nil
+		return nil, nil, "", "", nil
 	}
 	if err := configpkg.NormalizeResourceSet(prependSet, "prepend"); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 	if err := configpkg.NormalizeResourceSet(appendSet, "append"); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 	orderedPaths := orderedResourcePaths(rwPaths)
 	base := cfg.ResolveResources(orderedPaths)
 	image := selectImageOverride(cfg, orderedPaths)
+	platform := selectPlatformOverride(cfg, orderedPaths)
 
 	combined := make([]*configpkg.ResolvedResource, 0, len(extraSets)+len(base)+2)
 	names := make([]string, 0, len(extraSets)+len(base))
@@ -49,7 +50,7 @@ func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []stri
 		seen[name] = true
 	}
 	if len(missing) > 0 {
-		return nil, nil, "", fmt.Errorf("unknown resource set(s): %s", strings.Join(missing, ", "))
+		return nil, nil, "", "", fmt.Errorf("unknown resource set(s): %s", strings.Join(missing, ", "))
 	}
 
 	for _, res := range base {
@@ -67,7 +68,7 @@ func resolvedResources(cfg *configpkg.Config, rwPaths []string, extraSets []stri
 	if appendSet != nil {
 		combined = append(combined, &configpkg.ResolvedResource{Name: "", Spec: appendSet})
 	}
-	return combined, names, image, nil
+	return combined, names, image, platform, nil
 }
 
 func orderedResourcePaths(rwPaths []string) []string {
@@ -118,6 +119,21 @@ func selectImageOverride(cfg *configpkg.Config, orderedPaths []string) string {
 		}
 		if img, ok := cfg.ImageForPath(path); ok {
 			return img
+		}
+	}
+	return ""
+}
+
+func selectPlatformOverride(cfg *configpkg.Config, orderedPaths []string) string {
+	if cfg == nil {
+		return ""
+	}
+	for _, path := range orderedPaths {
+		if path == "." {
+			continue
+		}
+		if platform, ok := cfg.PlatformForPath(path); ok {
+			return platform
 		}
 	}
 	return ""

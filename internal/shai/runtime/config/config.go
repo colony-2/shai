@@ -21,6 +21,7 @@ type Config struct {
 	Type      string                  `yaml:"type"`
 	Version   int                     `yaml:"version"`
 	Image     string                  `yaml:"image"`
+	Platform  string                  `yaml:"platform"`
 	User      string                  `yaml:"user"`
 	Workspace string                  `yaml:"workspace"`
 	Resources map[string]*ResourceSet `yaml:"resources"`
@@ -86,12 +87,14 @@ type ApplyRule struct {
 	Path      string   `yaml:"path"`
 	Resources []string `yaml:"resources"`
 	Image     string   `yaml:"image"`
+	Platform  string   `yaml:"platform"`
 }
 
 type pathResources struct {
 	Path      string
 	Resources []*ResolvedResource
 	Image     string
+	Platform  string
 }
 
 // ResolvedResource couples a resource set with its name.
@@ -121,6 +124,10 @@ func (c *Config) applyTemplates(env, vars, conf map[string]string) error {
 	c.Image, err = expandTemplates(c.Image, env, vars, conf)
 	if err != nil {
 		return fmt.Errorf("image: %w", err)
+	}
+	c.Platform, err = expandTemplates(c.Platform, env, vars, conf)
+	if err != nil {
+		return fmt.Errorf("platform: %w", err)
 	}
 	c.User, err = expandTemplates(c.User, env, vars, conf)
 	if err != nil {
@@ -190,6 +197,10 @@ func (c *Config) applyTemplates(env, vars, conf map[string]string) error {
 		if err != nil {
 			return fmt.Errorf("apply[%d] image: %w", i, err)
 		}
+		c.Apply[i].Platform, err = expandTemplates(c.Apply[i].Platform, env, vars, conf)
+		if err != nil {
+			return fmt.Errorf("apply[%d] platform: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -252,8 +263,12 @@ func (c *Config) resolvePaths() error {
 			path = "."
 		}
 		image := strings.TrimSpace(rule.Image)
+		platform := strings.TrimSpace(rule.Platform)
 		if path == "." && image != "" {
 			return fmt.Errorf("apply path %q cannot override image", rule.Path)
+		}
+		if path == "." && platform != "" {
+			return fmt.Errorf("apply path %q cannot override platform", rule.Path)
 		}
 		var resList []*ResolvedResource
 		for _, name := range rule.Resources {
@@ -263,7 +278,7 @@ func (c *Config) resolvePaths() error {
 			}
 			resList = append(resList, &ResolvedResource{Name: name, Spec: res})
 		}
-		resolved = append(resolved, pathResources{Path: path, Resources: resList, Image: image})
+		resolved = append(resolved, pathResources{Path: path, Resources: resList, Image: image, Platform: platform})
 	}
 
 	// Validate call uniqueness per path.
@@ -362,6 +377,33 @@ func (c *Config) ImageForPath(path string) (string, bool) {
 		}
 	}
 	return image, matched
+}
+
+// PlatformForPath returns the first platform override that matches the provided path.
+func (c *Config) PlatformForPath(path string) (string, bool) {
+	candidate := normalizePath(path)
+	var (
+		platform string
+		matched  bool
+		matchLen int
+	)
+	for _, pr := range c.resolved {
+		if pr.Platform == "" {
+			continue
+		}
+		if pathMatches(pr.Path, candidate) {
+			length := 0
+			if pr.Path != "." {
+				length = len(strings.Split(pr.Path, "/"))
+			}
+			if !matched || length > matchLen {
+				platform = pr.Platform
+				matched = true
+				matchLen = length
+			}
+		}
+	}
+	return platform, matched
 }
 
 func loadFromData(data []byte, path string, env, vars map[string]string) (*Config, error) {

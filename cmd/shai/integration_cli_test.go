@@ -92,26 +92,19 @@ apply:
 	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o755))
 	require.NoError(t, os.WriteFile(cfgPath, []byte(strings.TrimSpace(shaiCfg)+"\n"), 0o644))
 
-	// Build CLI binary in a temp location to avoid races
-	bin := filepath.Join(tmp, "shai_bin")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	wd, err := os.Getwd()
-	require.NoError(t, err)
-	build.Dir = wd
-	build.Env = append(os.Environ(), "CGO_ENABLED=0")
-	out, err := build.CombinedOutput()
-	require.NoError(t, err, "go build failed: %s", string(out))
+	bin := buildCLIBinary(t, tmp)
 
 	// Run the CLI with stdin that immediately exits
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "-rw", ".", "-no-tty", "--", "sh", "-c", "echo HELLO")
+	cmd := exec.CommandContext(ctx, bin, "-rw", ".", "--no-tty", "--", "sh", "-c", "echo HELLO")
 	cmd.Dir = tmp
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err = cmd.Run()
+	err := cmd.Run()
+	require.NoError(t, err, "CLI output:\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
 
 	got := stdout.String() + stderr.String()
 
@@ -120,6 +113,77 @@ apply:
 
 	// wait second or container rm will fail due to macos conccurrency issues with virtiofs
 	time.Sleep(1 * time.Second)
+}
+
+func TestCLI_PlatformOverrideTakesPrecedence(t *testing.T) {
+	if !dockerAvailable(t) {
+		t.Skip("Docker not available")
+	}
+
+	tmp := t.TempDir()
+	shaiCfg := `
+type: shai-sandbox
+version: 1
+image: ghcr.io/colony-2/shai-base:latest
+platform: totally-invalid-platform
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources:
+      - base
+`
+	cfgPath := filepath.Join(tmp, shai.DefaultConfigRelPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o755))
+	require.NoError(t, os.WriteFile(cfgPath, []byte(strings.TrimSpace(shaiCfg)+"\n"), 0o644))
+
+	bin := buildCLIBinary(t, tmp)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, "-rw", ".", "--platform", dockerDaemonPlatform(t), "--no-tty", "--", "sh", "-c", "echo PLATFORM_OK")
+	cmd.Dir = tmp
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	require.NoError(t, err, "CLI output:\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+	assert.Contains(t, stdout.String()+stderr.String(), "PLATFORM_OK")
+
+	time.Sleep(1 * time.Second)
+}
+
+func buildCLIBinary(t *testing.T, dir string) string {
+	t.Helper()
+
+	bin := filepath.Join(dir, "shai_bin")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	build.Dir = wd
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", string(out))
+
+	return bin
+}
+
+func dockerDaemonPlatform(t *testing.T) string {
+	t.Helper()
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+	defer cli.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	info, err := cli.Info(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, info.OSType)
+	require.NotEmpty(t, info.Architecture)
+
+	return info.OSType + "/" + info.Architecture
 }
 
 // dockerAvailable tries to ping Docker; returns true if reachable
