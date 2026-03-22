@@ -30,6 +30,7 @@ func main() {
     cfg, err := shai.LoadSandboxConfig("/path/to/workspace",
         shai.WithReadWritePaths([]string{"src/components"}),
         shai.WithResourceSets([]string{"frontend-dev"}),
+        shai.WithPlatformOverride("linux/amd64"),
     )
     if err != nil {
         log.Fatal(err)
@@ -63,18 +64,19 @@ Configuration for the sandbox:
 
 ```go
 type SandboxConfig struct {
-    WorkspacePath   string              // Path to workspace
-    ConfigPath      string              // Path to .shai/config.yaml
-    ReadWritePaths  []string            // Paths to mount as writable
-    ResourceSets    []string            // Additional resource sets
-    PrependResourceSet *ResourceSet     // Extra resources prepended to resolved sets
-    AppendResourceSet  *ResourceSet     // Extra resources appended to resolved sets
-    TemplateVars    map[string]string   // Template variables
-    PostSetupExec   *SandboxExec        // Command to run
-    ImageOverride   string              // Override image
-    UserOverride    string              // Override user
-    Verbose         bool                // Enable verbose output
-    ShowScriptOutput bool               // Enable bootstrap warnings/banner
+    WorkingDir         string
+    ConfigFile         string
+    ReadWritePaths     []string
+    ResourceSets       []string
+    PrependResourceSet *ResourceSet
+    AppendResourceSet  *ResourceSet
+    TemplateVars       map[string]string
+    PostSetupExec      *SandboxExec
+    ImageOverride      string
+    PlatformOverride   string
+    UserOverride       string
+    Verbose            bool
+    ShowScriptOutput   bool
 }
 ```
 
@@ -89,6 +91,7 @@ type SandboxExec struct {
     Workdir string            // Working directory
     UseTTY  bool              // Allocate TTY
 }
+```
 
 ### ResourceSet
 
@@ -104,7 +107,6 @@ type ResourceSet struct {
     RootCommands []string
     Options      ResourceOptions
 }
-```
 ```
 
 ### Sandbox Interface
@@ -212,6 +214,14 @@ cfg, _ := shai.LoadSandboxConfig(workspacePath,
         "ENV":    "staging",
         "REGION": "us-east-1",
     }),
+)
+```
+
+### With Platform Override
+
+```go
+cfg, _ := shai.LoadSandboxConfig(workspacePath,
+    shai.WithPlatformOverride("linux/amd64"),
 )
 ```
 

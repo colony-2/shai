@@ -9,6 +9,7 @@ Complete reference for `.shai/config.yaml` configuration file.
 
 Shai configuration is stored in `.shai/config.yaml` at your workspace root. This file defines:
 - Which Docker image to use
+- Which optional image platform to target
 - Resource sets (network, mounts, env vars, etc.)
 - Apply rules (which paths get which resources)
 
@@ -59,6 +60,8 @@ shai --config /path/to/custom-config.yaml
 type: shai-sandbox
 version: 1
 image: ghcr.io/colony-2/shai-mega
+# Optional: set when you need a non-default image platform
+platform: linux/amd64
 
 resources:
   base-allowlist:

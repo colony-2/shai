@@ -158,6 +158,24 @@ apply:
 	assert.Contains(t, err.Error(), "cannot override image")
 }
 
+func TestApplyRootPlatformOverrideDisallowed(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: ghcr.io/example/image:latest
+resources:
+  base: {}
+apply:
+  - path: ./
+    platform: linux/arm64
+    resources: [base]
+`)
+	_, err := Load(path, map[string]string{}, map[string]string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot override platform")
+}
+
 func TestImageForPathPrefersMostSpecific(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfig(t, dir, `
@@ -186,6 +204,62 @@ apply:
 	img, ok = cfg.ImageForPath("bar/qux")
 	require.True(t, ok)
 	assert.Equal(t, "ghcr.io/parent/img:latest", img)
+}
+
+func TestPlatformForPathPrefersMostSpecific(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: ghcr.io/example/image:latest
+platform: linux/amd64
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources: [base]
+  - path: ./bar
+    platform: linux/arm64
+    resources: [base]
+  - path: ./bar/baz
+    platform: linux/arm/v7
+    resources: [base]
+`)
+	cfg, err := Load(path, map[string]string{}, map[string]string{})
+	require.NoError(t, err)
+
+	platform, ok := cfg.PlatformForPath("bar/baz/qux")
+	require.True(t, ok)
+	assert.Equal(t, "linux/arm/v7", platform)
+
+	platform, ok = cfg.PlatformForPath("bar/qux")
+	require.True(t, ok)
+	assert.Equal(t, "linux/arm64", platform)
+}
+
+func TestLoadConfigPlatformTemplates(t *testing.T) {
+	dir := t.TempDir()
+	path := writeConfig(t, dir, `
+type: shai-sandbox
+version: 1
+image: ghcr.io/example/image:latest
+platform: ${{ vars.PLATFORM }}
+resources:
+  base: {}
+apply:
+  - path: ./
+    resources: [base]
+  - path: ./bar
+    platform: ${{ env.SHADOW_PLATFORM }}
+    resources: [base]
+`)
+	cfg, err := Load(path, map[string]string{"SHADOW_PLATFORM": "linux/arm64"}, map[string]string{"PLATFORM": "linux/amd64"})
+	require.NoError(t, err)
+	assert.Equal(t, "linux/amd64", cfg.Platform)
+
+	platform, ok := cfg.PlatformForPath("bar")
+	require.True(t, ok)
+	assert.Equal(t, "linux/arm64", platform)
 }
 
 func TestTemplateMissingVar(t *testing.T) {

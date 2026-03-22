@@ -38,6 +38,7 @@ func newRootCmd() *cobra.Command {
 		templatePairs  []string
 		resourceSets   []string
 		imageOverride  string
+		platform       string
 		userOverride   string
 		containerName  string
 		privileged     bool
@@ -73,7 +74,7 @@ func newRootCmd() *cobra.Command {
 			ctx, cancel := setupSignals()
 			defer cancel()
 
-			if err := runEphemeral(ctx, workingDir, readWritePaths, verbose, postExec, configPath, varMap, resourceSets, imageOverride, userOverride, privileged); err != nil {
+			if err := runEphemeral(ctx, workingDir, readWritePaths, verbose, postExec, configPath, varMap, resourceSets, imageOverride, platform, userOverride, privileged); err != nil {
 				return err
 			}
 
@@ -88,6 +89,7 @@ func newRootCmd() *cobra.Command {
 	flags.StringArrayVar(&resourceSets, "resource-set", nil, "Resource set to activate (repeatable, alias: -rs)")
 	flags.StringArrayVarP(&templatePairs, "var", "v", nil, fmt.Sprintf("Template variable for %s (key=value)", shai.DefaultConfigRelPath))
 	flags.StringVarP(&imageOverride, "image", "i", "", "Override container image (highest precedence)")
+	flags.StringVar(&platform, "platform", "", "Override target image platform (for example linux/amd64)")
 	flags.StringVarP(&userOverride, "user", "u", "", "Override target user (highest precedence)")
 	flags.StringVarP(&containerName, "name", "n", "", "Container name (optional)")
 	flags.BoolVar(&privileged, "privileged", false, "Run container in privileged mode")
@@ -164,7 +166,7 @@ func normalizeLegacyArgs(args []string) []string {
 	return out
 }
 
-func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verbose bool, postExec *shai.SandboxExec, configPath string, vars map[string]string, resourceSets []string, imageOverride, userOverride string, privileged bool) error {
+func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verbose bool, postExec *shai.SandboxExec, configPath string, vars map[string]string, resourceSets []string, imageOverride, platformOverride, userOverride string, privileged bool) error {
 	sandbox, err := shai.NewSandbox(shai.SandboxConfig{
 		WorkingDir:       workingDir,
 		ConfigFile:       configPath,
@@ -174,6 +176,7 @@ func runEphemeral(ctx context.Context, workingDir string, rwPaths []string, verb
 		Verbose:          verbose,
 		PostSetupExec:    postExec,
 		ImageOverride:    imageOverride,
+		PlatformOverride: platformOverride,
 		UserOverride:     userOverride,
 		Privileged:       privileged,
 		ShowProgress:     true,

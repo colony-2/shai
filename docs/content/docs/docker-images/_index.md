@@ -67,6 +67,9 @@ version: 1
 # Use shai-mega (default)
 image: ghcr.io/colony-2/shai-mega
 
+# Optional: force a non-default platform
+platform: linux/amd64
+
 # Or use shai-base
 image: ghcr.io/colony-2/shai-base
 
@@ -76,10 +79,11 @@ image: ghcr.io/my-org/custom-dev:latest
 
 ## CLI Override
 
-Override the image at runtime:
+Override the image or platform at runtime:
 
 ```bash
 shai -rw src --image ghcr.io/my-org/custom:latest
+shai -rw src --platform linux/amd64
 ```
 
 ## Requirements

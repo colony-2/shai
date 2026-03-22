@@ -67,6 +67,42 @@ image: ${{ env.DEV_IMAGE }}
 
 ---
 
+### `platform`
+
+**Required:** No
+**Type:** String
+
+Optional default target image platform for sandboxes.
+
+```yaml
+platform: linux/amd64
+```
+
+**Supports templates:** Yes (`${{ env.* }}`, `${{ vars.* }}`)
+
+**Examples:**
+```yaml
+# Force x86_64 images on an ARM host
+platform: linux/amd64
+
+# Native ARM image
+platform: linux/arm64
+
+# Using environment variable
+platform: ${{ env.SHAI_PLATFORM }}
+```
+
+**CLI override:**
+```bash
+shai --platform linux/amd64
+```
+
+{{< callout type="info" >}}
+Omit this field to let Docker use its normal default platform resolution.
+{{< /callout >}}
+
+---
+
 ### `user`
 
 **Required:** No
@@ -136,7 +172,7 @@ resources:
 **Required:** Yes
 **Type:** List of apply rules
 
-Ordered list that maps workspace paths to resource sets. See [Apply Rules](#apply-rules) below.
+Ordered list that maps workspace paths to resource sets and optional image/platform overrides. See [Apply Rules](#apply-rules) below.
 
 ```yaml
 apply:
@@ -412,6 +448,7 @@ apply:
   - path: <workspace-relative-path>
     resources: [<resource-set-names>]
     image: <optional-image-override>
+    platform: <optional-platform-override>
 ```
 
 ### `path`
@@ -482,6 +519,34 @@ apply:
 - More specific paths take precedence
 - Root path (`.` or `./`) cannot use image overrides
 - CLI `--image` flag takes ultimate precedence
+
+---
+
+### `platform`
+
+**Required:** No
+**Type:** String
+
+Optional target platform override for this path.
+
+**Example:**
+```yaml
+apply:
+  - path: ./
+    resources: [base-allowlist]
+    # Uses default platform from top-level config or Docker default
+
+  - path: ml/training
+    resources: [gpu-access]
+    image: ghcr.io/my-org/pytorch-gpu:latest
+    platform: linux/amd64
+```
+
+**Behavior:**
+- Overrides the top-level `platform` key for this path
+- More specific paths take precedence
+- Root path (`.` or `./`) cannot use platform overrides
+- CLI `--platform` flag takes ultimate precedence
 
 ---
 
@@ -573,6 +638,7 @@ version: 1
 image: <image-name>
 
 # Optional
+platform: <os/arch[/variant]>
 user: <username>
 workspace: <path>
 
@@ -611,6 +677,7 @@ apply:
   - path: <workspace-path>
     resources: [<resource-set-names>]
     image: <optional-image-override>
+    platform: <optional-platform-override>
 ```
 
 ## Validation

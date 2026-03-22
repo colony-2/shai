@@ -1,6 +1,8 @@
 type: shai-sandbox
 version: 1
 image: ghcr.io/colony-2/shai-mega
+# Optional: set a default target image platform
+platform: linux/arm64
 # user defaults to "shai" aligned to the host UID/GID at runtime
 resources:
   global:
@@ -48,3 +50,4 @@ apply:
     resources:
       - dir1
     image: ghcr.io/colony-2/shai-mega:dir1
+    platform: linux/amd64
