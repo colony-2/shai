@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	imagetypes "github.com/docker/docker/api/types/image"
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
 
@@ -46,7 +46,7 @@ func pullDockerImage(image string) error {
 
 	// Pull the image
 	fmt.Printf("Pulling image %s...\n", image)
-	reader, err := cli.ImagePull(ctx, image, imagetypes.PullOptions{})
+	reader, err := cli.ImagePull(ctx, image, dockertypes.ImagePullOptions{})
 	if err != nil {
 		return fmt.Errorf("image pull: %w", err)
 	}

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
-	imagetypes "github.com/docker/docker/api/types/image"
+	dockertypes "github.com/docker/docker/api/types"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
@@ -142,7 +142,7 @@ func TestParsePlatform(t *testing.T) {
 }
 
 func TestImageMatchesPlatform(t *testing.T) {
-	match := imageMatchesPlatform(imagetypes.InspectResponse{
+	match := imageMatchesPlatform(dockertypes.ImageInspect{
 		Os:           "linux",
 		Architecture: "arm64",
 		Variant:      "v8",
@@ -152,7 +152,7 @@ func TestImageMatchesPlatform(t *testing.T) {
 	})
 	require.True(t, match)
 
-	match = imageMatchesPlatform(imagetypes.InspectResponse{
+	match = imageMatchesPlatform(dockertypes.ImageInspect{
 		Os:           "linux",
 		Architecture: "arm",
 		Variant:      "v7",
@@ -163,7 +163,7 @@ func TestImageMatchesPlatform(t *testing.T) {
 	})
 	require.True(t, match)
 
-	match = imageMatchesPlatform(imagetypes.InspectResponse{
+	match = imageMatchesPlatform(dockertypes.ImageInspect{
 		Os:           "linux",
 		Architecture: "amd64",
 	}, &ocispec.Platform{

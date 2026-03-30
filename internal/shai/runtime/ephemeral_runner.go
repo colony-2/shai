@@ -25,10 +25,9 @@ import (
 	"github.com/colony-2/shai/internal/shai/runtime/alias"
 	"github.com/colony-2/shai/internal/shai/runtime/bootstrap"
 	configpkg "github.com/colony-2/shai/internal/shai/runtime/config"
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
-	networktypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -308,7 +307,7 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 	}
 	r.currentContainerID = resp.ID
 
-	if err := r.docker.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+	if err := r.docker.ContainerStart(ctx, resp.ID, dockertypes.ContainerStartOptions{}); err != nil {
 		return fmt.Errorf("start container: %w", err)
 	}
 
@@ -317,7 +316,7 @@ func (r *EphemeralRunner) runEphemeralContainerWithID(ctx context.Context, useTT
 	default:
 	}
 
-	attachOpts := container.AttachOptions{
+	attachOpts := dockertypes.ContainerAttachOptions{
 		Stream: true,
 		Stdin:  true,
 		Stdout: true,
@@ -677,7 +676,7 @@ func (r *EphemeralRunner) ensureImage(ctx context.Context, img string) error {
 		}
 	}
 
-	pullOpts := imagetypes.PullOptions{}
+	pullOpts := dockertypes.ImagePullOptions{}
 	if r.platform != "" {
 		pullOpts.Platform = r.platform
 	}
@@ -840,7 +839,7 @@ func (r *EphemeralRunner) startTTYResizeWatcher(ctx context.Context, fd uintptr,
 	}
 	resize := func() {
 		if ws, err := term.GetWinsize(fd); err == nil && ws != nil {
-			_ = r.docker.ContainerResize(context.Background(), containerID, container.ResizeOptions{
+			_ = r.docker.ContainerResize(context.Background(), containerID, dockertypes.ResizeOptions{
 				Height: uint(ws.Height),
 				Width:  uint(ws.Width),
 			})
@@ -1144,7 +1143,7 @@ func parsePlatform(platform string) (*ocispec.Platform, error) {
 	return spec, nil
 }
 
-func imageMatchesPlatform(inspect imagetypes.InspectResponse, platform *ocispec.Platform) bool {
+func imageMatchesPlatform(inspect dockertypes.ImageInspect, platform *ocispec.Platform) bool {
 	if platform == nil {
 		return true
 	}
@@ -1178,7 +1177,7 @@ func getDockerBridgeGatewayIP(ctx context.Context, dockerClient *client.Client) 
 	}
 
 	// Get the default bridge network
-	networks, err := dockerClient.NetworkList(ctx, networktypes.ListOptions{})
+	networks, err := dockerClient.NetworkList(ctx, dockertypes.NetworkListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("list networks: %w", err)
 	}

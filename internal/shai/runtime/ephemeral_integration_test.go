@@ -14,7 +14,7 @@ import (
 	"time"
 
 	shai "github.com/colony-2/shai/internal/shai/runtime"
-	"github.com/docker/docker/api/types/container"
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -392,7 +392,7 @@ func getContainerIDs(t *testing.T) []string {
 	defer cli.Close()
 
 	ctx := context.Background()
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	containers, err := cli.ContainerList(ctx, dockertypes.ContainerListOptions{All: true})
 	require.NoError(t, err)
 
 	var ids []string
@@ -408,7 +408,7 @@ func containerExists(t *testing.T, containerID string) bool {
 	defer cli.Close()
 
 	ctx := context.Background()
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	containers, err := cli.ContainerList(ctx, dockertypes.ContainerListOptions{All: true})
 	require.NoError(t, err)
 
 	for _, c := range containers {
