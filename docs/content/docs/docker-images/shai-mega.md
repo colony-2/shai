@@ -38,10 +38,23 @@ Comprehensive development environment with multiple language runtimes, tools, an
 
 ### AI CLI Tools
 
+- **C2M** - Colony 2's agent memory CLI
 - **Claude Code** - Anthropic's official CLI
 - **Codex** - OpenAI's coding agent
 - **Gemini CLI** - Google's AI CLI
 - **Moonrepo** - Repository management tool
+- **Wrangler** - Cloudflare Workers CLI
+
+### Cloud, IaC & Kubernetes CLIs
+
+- **OpenTofu** - Infrastructure as code CLI
+- **AWS CLI** - Amazon Web Services CLI
+- **Google Cloud CLI** - `gcloud`, `gsutil`, and `bq`
+- **Azure CLI** - `az`
+- **Pulumi** - Infrastructure as code CLI
+- **kubectl** - Kubernetes CLI
+- **Helm** - Kubernetes package manager
+- **Kustomize** - Kubernetes manifest customization CLI
 
 ### Browser Automation
 
@@ -64,6 +77,7 @@ Comprehensive development environment with multiple language runtimes, tools, an
 
 ### Build Tools
 
+- **Bazel** - Build and test tool
 - **build-essential** - Essential build tools (make, gcc, etc.)
 - **pkg-config** - Library configuration helper
 - **cmake** - Cross-platform build system
@@ -162,9 +176,20 @@ All language toolchains are installed system-wide:
 /usr/bin/python3
 /usr/bin/pip3
 
-# AI Tools
+# CLIs
+/usr/local/bin/c2m
 /usr/local/bin/claude
 /usr/local/bin/gemini-cli
+/usr/local/bin/wrangler
+/usr/local/bin/bazel
+/usr/local/bin/tofu
+/usr/local/bin/aws
+/usr/local/bin/gcloud
+/usr/local/bin/az
+/usr/local/bin/pulumi
+/usr/local/bin/kubectl
+/usr/local/bin/helm
+/usr/local/bin/kustomize
 ```
 
 PATH is pre-configured for all users.
