@@ -28,6 +28,16 @@ A comprehensive Debian-based development environment with modern programming lan
 - **wrangler** - Cloudflare Workers CLI
 - **playwright** - Browser automation (includes Chromium with deps)
 
+### Cloud, IaC & Kubernetes CLIs
+- **OpenTofu** - Infrastructure as code CLI
+- **awscli** - AWS CLI
+- **gcloud** - Google Cloud CLI
+- **az** - Azure CLI
+- **pulumi** - Pulumi CLI
+- **kubectl** - Kubernetes CLI
+- **helm** - Kubernetes package manager
+- **kustomize** - Kubernetes manifest customization CLI
+
 ### System Tools & Utilities
 - **Shells**: bash, zsh (available, not configured as default)
 - **Version Control**: git
@@ -52,7 +62,7 @@ This image uses a **multi-stage build** to automatically fetch the latest versio
 By default, the following are fetched automatically:
 - **Languages**: Go, Rust, Node.js
 - **npm packages**: npm, yarn, pnpm, c2m, codex, gemini-cli, claude-code, moon, wrangler, playwright
-- **release binaries**: bazel
+- **release/source installs**: bazel, opentofu, awscli, gcloud, azure-cli, pulumi, helm, kubectl, kustomize
 
 ### Overriding Versions
 
@@ -144,9 +154,17 @@ The Dockerfile is organized into distinct layers for optimal caching:
 9. **C2M CLI** - `@colony2/c2m`
 10. **Wrangler** - Cloudflare Workers CLI
 11. **Bazel** - Bazel release binary
-12. **Playwright** - Browser automation with Chromium
-13. **System configuration** - Locale generation
-14. **Profile.d scripts** - Environment variable configuration
+12. **OpenTofu** - IaC CLI
+13. **AWS CLI** - official tagged source build
+14. **Google Cloud CLI** - official tarball
+15. **Azure CLI** - Python venv install
+16. **Pulumi** - official release tarball
+17. **Helm** - official Go module build
+18. **kubectl** - official Kubernetes apt package
+19. **Kustomize** - official Go module build
+20. **Playwright** - Browser automation with Chromium
+21. **System configuration** - Locale generation
+22. **Profile.d scripts** - Environment variable configuration
 
 This structure ensures that:
 - Changing npm package versions doesn't rebuild Go/Rust/Node layers

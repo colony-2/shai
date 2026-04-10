@@ -1,5 +1,5 @@
 # shai-mega: Debian slim with dev tools and CLIs
-# Includes: Go, Rust (stable), Python, Node, C/C++, Java, jq, git, Bazel
+# Includes: Go, Rust (stable), Python, Node, C/C++, Java, jq, git, Bazel, and cloud/Kubernetes CLIs
 # Default working directory: /src
 # Image: colony-2/shai-mega
 
@@ -13,7 +13,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG CACHE_BUST
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates jq && \
+    apt-get install -y --no-install-recommends curl ca-certificates gzip jq && \
     rm -rf /var/lib/apt/lists/*
 
 # Cache-busting layer to force version refresh when needed
@@ -36,15 +36,26 @@ RUN curl -s https://registry.npmjs.org/npm | jq -r '.["dist-tags"].latest' > /tm
     curl -s https://registry.npmjs.org/wrangler | jq -r '.["dist-tags"].latest' > /tmp/wrangler.version && \
     curl -s https://registry.npmjs.org/playwright | jq -r '.["dist-tags"].latest' > /tmp/playwright.version
 
-# Fetch latest version of Bazel
-RUN curl -fsSL https://api.github.com/repos/bazelbuild/bazel/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/bazel.version
+# Fetch latest versions of infra and platform CLIs
+RUN curl -fsSL https://api.github.com/repos/bazelbuild/bazel/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/bazel.version && \
+    curl -fsSL https://api.github.com/repos/opentofu/opentofu/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/opentofu.version && \
+    curl -fsSL https://api.github.com/repos/aws/aws-cli/tags?per_page=1 | jq -r '.[0].name' > /tmp/awscli.version && \
+    curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/components-2.json | jq -r '.version' > /tmp/gcloud.version && \
+    curl -fsSL https://pypi.org/pypi/azure-cli/json | jq -r '.info.version' > /tmp/azure-cli.version && \
+    curl -fsSL https://api.github.com/repos/pulumi/pulumi/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/pulumi.version && \
+    curl -fsSL https://api.github.com/repos/helm/helm/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/helm.version && \
+    curl -fsSL https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name | split("/")[-1] | ltrimstr("v")' > /tmp/kustomize.version
+
+RUN KUBECTL_MINOR=$(curl -fsSL https://api.github.com/repos/kubernetes/kubernetes/releases?per_page=20 | jq -r 'map(select(.prerelease | not)) | .[0].tag_name | ltrimstr("v")' | awk -F. '{print $1 "." $2}') && \
+    curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${KUBECTL_MINOR}/deb/Packages.gz" | gzip -dc | awk '$1 == "Package:" && $2 == "kubectl" {in_pkg=1; next} /^$/ {in_pkg=0} in_pkg && $1 == "Version:" {print $2}' | sort -V | tail -n1 > /tmp/kubectl-package.version && \
+    sed 's/-.*//' /tmp/kubectl-package.version > /tmp/kubectl.version
 
 ## Main build stage
 ARG BASE_IMAGE=debian:bookworm-slim
 FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source="colony-2/shai-mega" \
-      org.opencontainers.image.description="Slim Debian dev image with Go, Rust, Python, Node, C/C++, Java, jq, git, Bazel, and common AI/developer CLIs" \
+      org.opencontainers.image.description="Slim Debian dev image with Go, Rust, Python, Node, C/C++, Java, jq, git, Bazel, and common AI, cloud, IaC, and Kubernetes CLIs" \
       org.opencontainers.image.title="shai-mega"
 
 ## Versions - no defaults, will use latest unless overridden
@@ -58,7 +69,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
-    PATH="/usr/local/cargo/bin:/usr/local/go/bin:${PATH}"
+    PATH="/usr/local/cargo/bin:/usr/local/go/bin:${PATH}" \
+    CLOUDSDK_PYTHON=/usr/bin/python3
 
 ## Layer 1: Base system packages and build tools
 RUN set -euxo pipefail \
@@ -197,7 +209,115 @@ RUN set -euxo pipefail \
     && chmod 0755 /usr/local/bin/bazel \
     && bazel --version
 
-## Layer 12: Playwright installation with dependencies
+## Layer 12: OpenTofu installation with version pinning
+COPY --from=version-fetcher /tmp/opentofu.version /tmp/opentofu.version
+
+RUN set -euxo pipefail \
+    && OPENTOFU_VER=$(cat /tmp/opentofu.version) \
+    && echo "Installing OpenTofu ${OPENTOFU_VER}" \
+    && arch=$(dpkg --print-architecture) \
+    && case "$arch" in amd64) OPENTOFU_ARCH=amd64 ;; arm64) OPENTOFU_ARCH=arm64 ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac \
+    && curl -fsSL "https://github.com/opentofu/opentofu/releases/download/v${OPENTOFU_VER}/tofu_${OPENTOFU_VER}_${OPENTOFU_ARCH}.deb" -o /tmp/tofu.deb \
+    && dpkg -i /tmp/tofu.deb \
+    && rm -f /tmp/tofu.deb \
+    && tofu version
+
+## Layer 13: AWS CLI installation with version pinning
+COPY --from=version-fetcher /tmp/awscli.version /tmp/awscli.version
+
+RUN set -euxo pipefail \
+    && AWSCLI_VER=$(cat /tmp/awscli.version) \
+    && echo "Installing AWS CLI ${AWSCLI_VER}" \
+    && rm -rf /opt/aws-cli \
+    && python3 -m venv /opt/aws-cli \
+    && /opt/aws-cli/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/aws-cli/bin/pip install --no-cache-dir "https://github.com/aws/aws-cli/archive/refs/tags/${AWSCLI_VER}.tar.gz" \
+    && ln -sf /opt/aws-cli/bin/aws /usr/local/bin/aws \
+    && aws --version
+
+## Layer 14: Google Cloud CLI installation with version pinning
+COPY --from=version-fetcher /tmp/gcloud.version /tmp/gcloud.version
+
+RUN set -euxo pipefail \
+    && GCLOUD_VER=$(cat /tmp/gcloud.version) \
+    && echo "Installing Google Cloud CLI ${GCLOUD_VER}" \
+    && arch=$(dpkg --print-architecture) \
+    && case "$arch" in amd64) GCLOUD_ARCH=x86_64 ;; arm64) GCLOUD_ARCH=arm ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac \
+    && curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VER}-linux-${GCLOUD_ARCH}.tar.gz" -o /tmp/gcloud.tgz \
+    && rm -rf /opt/google-cloud-sdk \
+    && mkdir -p /opt \
+    && tar -xzf /tmp/gcloud.tgz -C /opt \
+    && rm -f /tmp/gcloud.tgz \
+    && ln -sf /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud \
+    && ln -sf /opt/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil \
+    && ln -sf /opt/google-cloud-sdk/bin/bq /usr/local/bin/bq \
+    && gcloud version | head -n 1
+
+## Layer 15: Azure CLI installation with version pinning
+COPY --from=version-fetcher /tmp/azure-cli.version /tmp/azure-cli.version
+
+RUN set -euxo pipefail \
+    && AZURE_CLI_VER=$(cat /tmp/azure-cli.version) \
+    && echo "Installing Azure CLI ${AZURE_CLI_VER}" \
+    && rm -rf /opt/azure-cli \
+    && python3 -m venv /opt/azure-cli \
+    && /opt/azure-cli/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/azure-cli/bin/pip install --no-cache-dir "azure-cli==${AZURE_CLI_VER}" \
+    && ln -sf /opt/azure-cli/bin/az /usr/local/bin/az \
+    && az version --query '"azure-cli"' -o tsv
+
+## Layer 16: Pulumi CLI installation with version pinning
+COPY --from=version-fetcher /tmp/pulumi.version /tmp/pulumi.version
+
+RUN set -euxo pipefail \
+    && PULUMI_VER=$(cat /tmp/pulumi.version) \
+    && echo "Installing Pulumi ${PULUMI_VER}" \
+    && arch=$(dpkg --print-architecture) \
+    && case "$arch" in amd64) PULUMI_ARCH=x64 ;; arm64) PULUMI_ARCH=arm64 ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac \
+    && curl -fsSL "https://github.com/pulumi/pulumi/releases/download/v${PULUMI_VER}/pulumi-v${PULUMI_VER}-linux-${PULUMI_ARCH}.tar.gz" -o /tmp/pulumi.tgz \
+    && rm -rf /opt/pulumi \
+    && mkdir -p /opt \
+    && tar -xzf /tmp/pulumi.tgz -C /opt \
+    && rm -f /tmp/pulumi.tgz \
+    && ln -sf /opt/pulumi/pulumi /usr/local/bin/pulumi \
+    && pulumi version
+
+## Layer 17: Helm installation with version pinning
+COPY --from=version-fetcher /tmp/helm.version /tmp/helm.version
+
+RUN set -euxo pipefail \
+    && HELM_VER=$(cat /tmp/helm.version) \
+    && echo "Installing Helm ${HELM_VER}" \
+    && GOPROXY=https://proxy.golang.org,direct GOBIN=/usr/local/bin go install "helm.sh/helm/v4/cmd/helm@v${HELM_VER}" \
+    && helm version --short
+
+## Layer 18: kubectl installation with version pinning
+COPY --from=version-fetcher /tmp/kubectl.version /tmp/kubectl-package.version /tmp/
+
+RUN set -euxo pipefail \
+    && KUBECTL_VER=$(cat /tmp/kubectl.version) \
+    && KUBECTL_PKG_VER=$(cat /tmp/kubectl-package.version) \
+    && KUBECTL_MINOR=$(printf '%s' "${KUBECTL_VER}" | awk -F. '{print $1 "." $2}') \
+    && echo "Installing kubectl ${KUBECTL_VER} (${KUBECTL_PKG_VER})" \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${KUBECTL_MINOR}/deb/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_MINOR}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "kubectl=${KUBECTL_PKG_VER}" \
+    && rm -f /etc/apt/sources.list.d/kubernetes.list /etc/apt/keyrings/kubernetes-apt-keyring.gpg \
+    && rm -rf /var/lib/apt/lists/* \
+    && kubectl version --client=true
+
+## Layer 19: Kustomize installation with version pinning
+COPY --from=version-fetcher /tmp/kustomize.version /tmp/kustomize.version
+
+RUN set -euxo pipefail \
+    && KUSTOMIZE_VER=$(cat /tmp/kustomize.version) \
+    && echo "Installing Kustomize ${KUSTOMIZE_VER}" \
+    && GOPROXY=https://proxy.golang.org,direct GOBIN=/usr/local/bin go install "sigs.k8s.io/kustomize/kustomize/v5@v${KUSTOMIZE_VER}" \
+    && kustomize version
+
+## Layer 20: Playwright installation with dependencies
 COPY --from=version-fetcher /tmp/playwright.version /tmp/playwright.version
 
 RUN set -euxo pipefail \
@@ -210,12 +330,12 @@ RUN set -euxo pipefail \
     && chmod -R a+rx /ms-playwright \
     && npm cache clean --force
 
-## Layer 13: System configuration (locale, environment)
+## Layer 21: System configuration (locale, environment)
 RUN set -euxo pipefail \
     && if [ -f /etc/locale.gen ]; then sed -i 's/^# \?en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen; fi \
     && mkdir -p /src
 
-## Layer 14: Profile.d environment scripts
+## Layer 22: Profile.d environment scripts
 COPY 10-locale.sh /etc/profile.d/10-locale.sh
 COPY 10-lang-paths.sh /etc/profile.d/10-lang-paths.sh
 

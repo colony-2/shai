@@ -228,6 +228,7 @@ Shai is preconfigured to use the `ghcr.io/colony-2/shai-mega` image, which provi
 **Included in shai-mega:**
 - **Languages & Runtimes:** Go (latest), Rust (stable), Node.js (latest), Python 3, Java (default JDK), C/C++ (GCC/Clang)
 - **Package Managers & Build Tools:** npm, yarn, pnpm, pip, cargo, Bazel
+- **Cloud & Infra CLIs:** OpenTofu, AWS CLI, Google Cloud CLI, Azure CLI, Pulumi, kubectl, Helm, Kustomize
 - **AI & Developer CLIs:** C2M, OpenAI Codex, Google Gemini CLI, Anthropic Claude Code, Moonrepo, Wrangler
 - **Browser Automation:** Playwright with Chromium
 - **Development Tools:** git, jq, curl, wget, bash-completion, vim, nano, htop, tree, rsync, ssh
