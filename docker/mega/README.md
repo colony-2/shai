@@ -1,6 +1,6 @@
 # shai-mega
 
-A comprehensive Debian-based development environment with modern programming languages, build tools, and AI CLI tools.
+A comprehensive Debian-based development environment with modern programming languages, build tools, and AI/developer CLIs.
 
 ## What's Included
 
@@ -16,13 +16,16 @@ A comprehensive Debian-based development environment with modern programming lan
 - **npm, yarn, pnpm** - Latest versions from npm registry
 - **cargo** - Rust package manager
 - **pip** - Python package manager
+- **bazel** - Bazel build system
 - **build-essential** - GCC, make, and core build tools
 
 ### AI & Development CLIs
+- **@colony2/c2m** - C2M agent memory CLI
 - **@openai/codex** - OpenAI Codex CLI
 - **@google/gemini-cli** - Google Gemini CLI
 - **@anthropic-ai/claude-code** - Anthropic Claude Code CLI
 - **@moonrepo/cli** - Moon build system
+- **wrangler** - Cloudflare Workers CLI
 - **playwright** - Browser automation (includes Chromium with deps)
 
 ### System Tools & Utilities
@@ -48,7 +51,8 @@ This image uses a **multi-stage build** to automatically fetch the latest versio
 
 By default, the following are fetched automatically:
 - **Languages**: Go, Rust, Node.js
-- **npm packages**: npm, yarn, pnpm, codex, gemini-cli, claude-code, moon, playwright
+- **npm packages**: npm, yarn, pnpm, c2m, codex, gemini-cli, claude-code, moon, wrangler, playwright
+- **release binaries**: bazel
 
 ### Overriding Versions
 
@@ -137,9 +141,12 @@ The Dockerfile is organized into distinct layers for optimal caching:
 6. **Java verification** - Verify JDK installation
 7. **npm package managers** - npm, yarn, pnpm
 8. **AI CLI tools** - AI assistant CLIs
-9. **Playwright** - Browser automation with Chromium
-10. **System configuration** - Locale generation
-11. **Profile.d scripts** - Environment variable configuration
+9. **C2M CLI** - `@colony2/c2m`
+10. **Wrangler** - Cloudflare Workers CLI
+11. **Bazel** - Bazel release binary
+12. **Playwright** - Browser automation with Chromium
+13. **System configuration** - Locale generation
+14. **Profile.d scripts** - Environment variable configuration
 
 This structure ensures that:
 - Changing npm package versions doesn't rebuild Go/Rust/Node layers

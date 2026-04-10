@@ -1,5 +1,5 @@
 # shai-mega: Debian slim with dev tools and CLIs
-# Includes: Go, Rust (stable), Python, Node, C/C++, Java, jq, git
+# Includes: Go, Rust (stable), Python, Node, C/C++, Java, jq, git, Bazel
 # Default working directory: /src
 # Image: colony-2/shai-mega
 
@@ -31,15 +31,20 @@ RUN curl -s https://registry.npmjs.org/npm | jq -r '.["dist-tags"].latest' > /tm
     curl -s https://registry.npmjs.org/@openai/codex | jq -r '.["dist-tags"].latest' > /tmp/codex.version && \
     curl -s https://registry.npmjs.org/@google/gemini-cli | jq -r '.["dist-tags"].latest' > /tmp/gemini.version && \
     curl -s https://registry.npmjs.org/@anthropic-ai/claude-code | jq -r '.["dist-tags"].latest' > /tmp/claude.version && \
+    curl -s https://registry.npmjs.org/@colony2/c2m | jq -r '.["dist-tags"].latest' > /tmp/c2m.version && \
     curl -s https://registry.npmjs.org/@moonrepo/cli | jq -r '.["dist-tags"].latest' > /tmp/moon.version && \
+    curl -s https://registry.npmjs.org/wrangler | jq -r '.["dist-tags"].latest' > /tmp/wrangler.version && \
     curl -s https://registry.npmjs.org/playwright | jq -r '.["dist-tags"].latest' > /tmp/playwright.version
+
+# Fetch latest version of Bazel
+RUN curl -fsSL https://api.github.com/repos/bazelbuild/bazel/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/bazel.version
 
 ## Main build stage
 ARG BASE_IMAGE=debian:bookworm-slim
 FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source="colony-2/shai-mega" \
-      org.opencontainers.image.description="Slim Debian dev image with Go, Rust, Python, Node, C/C++, Java, jq, git, and common AI CLIs" \
+      org.opencontainers.image.description="Slim Debian dev image with Go, Rust, Python, Node, C/C++, Java, jq, git, Bazel, and common AI/developer CLIs" \
       org.opencontainers.image.title="shai-mega"
 
 ## Versions - no defaults, will use latest unless overridden
@@ -160,7 +165,39 @@ RUN set -euxo pipefail \
     && gemini -h >/dev/null 2>&1 || true \
     && claude -h >/dev/null 2>&1 || claude-code -h >/dev/null 2>&1 || true
 
-## Layer 9: Playwright installation with dependencies
+## Layer 9: C2M CLI with version pinning
+COPY --from=version-fetcher /tmp/c2m.version /tmp/c2m.version
+
+RUN set -euxo pipefail \
+    && C2M_VER=$(cat /tmp/c2m.version) \
+    && echo "Installing @colony2/c2m ${C2M_VER}" \
+    && npm -g install "@colony2/c2m@${C2M_VER}" \
+    && npm cache clean --force \
+    && command -v c2m
+
+## Layer 10: Wrangler CLI with version pinning
+COPY --from=version-fetcher /tmp/wrangler.version /tmp/wrangler.version
+
+RUN set -euxo pipefail \
+    && WRANGLER_VER=$(cat /tmp/wrangler.version) \
+    && echo "Installing wrangler ${WRANGLER_VER}" \
+    && npm -g install "wrangler@${WRANGLER_VER}" \
+    && npm cache clean --force \
+    && wrangler --version
+
+## Layer 11: Bazel installation with version pinning
+COPY --from=version-fetcher /tmp/bazel.version /tmp/bazel.version
+
+RUN set -euxo pipefail \
+    && BAZEL_VER=$(cat /tmp/bazel.version) \
+    && echo "Installing Bazel ${BAZEL_VER}" \
+    && arch=$(dpkg --print-architecture) \
+    && case "$arch" in amd64) BAZEL_ARCH=x86_64 ;; arm64) BAZEL_ARCH=arm64 ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac \
+    && curl -fsSL "https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VER}/bazel-${BAZEL_VER}-linux-${BAZEL_ARCH}" -o /usr/local/bin/bazel \
+    && chmod 0755 /usr/local/bin/bazel \
+    && bazel --version
+
+## Layer 12: Playwright installation with dependencies
 COPY --from=version-fetcher /tmp/playwright.version /tmp/playwright.version
 
 RUN set -euxo pipefail \
@@ -173,12 +210,12 @@ RUN set -euxo pipefail \
     && chmod -R a+rx /ms-playwright \
     && npm cache clean --force
 
-## Layer 10: System configuration (locale, environment)
+## Layer 13: System configuration (locale, environment)
 RUN set -euxo pipefail \
     && if [ -f /etc/locale.gen ]; then sed -i 's/^# \?en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen; fi \
     && mkdir -p /src
 
-## Layer 11: Profile.d environment scripts
+## Layer 14: Profile.d environment scripts
 COPY 10-locale.sh /etc/profile.d/10-locale.sh
 COPY 10-lang-paths.sh /etc/profile.d/10-lang-paths.sh
 

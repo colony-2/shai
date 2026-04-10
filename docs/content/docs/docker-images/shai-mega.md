@@ -38,10 +38,12 @@ Comprehensive development environment with multiple language runtimes, tools, an
 
 ### AI CLI Tools
 
+- **C2M** - Colony 2's agent memory CLI
 - **Claude Code** - Anthropic's official CLI
 - **Codex** - OpenAI's coding agent
 - **Gemini CLI** - Google's AI CLI
 - **Moonrepo** - Repository management tool
+- **Wrangler** - Cloudflare Workers CLI
 
 ### Browser Automation
 
@@ -64,6 +66,7 @@ Comprehensive development environment with multiple language runtimes, tools, an
 
 ### Build Tools
 
+- **Bazel** - Build and test tool
 - **build-essential** - Essential build tools (make, gcc, etc.)
 - **pkg-config** - Library configuration helper
 - **cmake** - Cross-platform build system
@@ -163,8 +166,11 @@ All language toolchains are installed system-wide:
 /usr/bin/pip3
 
 # AI Tools
+/usr/local/bin/c2m
 /usr/local/bin/claude
 /usr/local/bin/gemini-cli
+/usr/local/bin/wrangler
+/usr/local/bin/bazel
 ```
 
 PATH is pre-configured for all users.
