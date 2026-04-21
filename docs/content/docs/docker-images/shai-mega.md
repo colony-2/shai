@@ -24,7 +24,7 @@ Comprehensive development environment with multiple language runtimes, tools, an
 - **Go** - Latest stable (1.21+)
 - **Rust** - Stable toolchain with cargo
 - **Node.js** - Latest LTS with npm, yarn, pnpm
-- **Python** - Python 3.11+ with pip
+- **Python** - Python 3.11+ with pip and uv/uvx
 - **Java** - OpenJDK (default-jdk)
 - **C/C++** - GCC and Clang compilers
 
@@ -34,6 +34,7 @@ Comprehensive development environment with multiple language runtimes, tools, an
 - **yarn** - Alternative Node.js package manager
 - **pnpm** - Fast, disk-efficient Node.js package manager
 - **pip** - Python package installer
+- **uv / uvx** - Fast Python package manager and tool runner
 - **cargo** - Rust package manager
 
 ### AI CLI Tools
@@ -175,6 +176,8 @@ All language toolchains are installed system-wide:
 # Python
 /usr/bin/python3
 /usr/bin/pip3
+/usr/local/bin/uv
+/usr/local/bin/uvx
 
 # CLIs
 /usr/local/bin/c2m

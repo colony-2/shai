@@ -42,6 +42,7 @@ RUN curl -fsSL https://api.github.com/repos/bazelbuild/bazel/releases/latest | j
     curl -fsSL https://api.github.com/repos/aws/aws-cli/tags?per_page=1 | jq -r '.[0].name' > /tmp/awscli.version && \
     curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/components-2.json | jq -r '.version' > /tmp/gcloud.version && \
     curl -fsSL https://pypi.org/pypi/azure-cli/json | jq -r '.info.version' > /tmp/azure-cli.version && \
+    curl -fsSL https://pypi.org/pypi/uv/json | jq -r '.info.version' > /tmp/uv.version && \
     curl -fsSL https://api.github.com/repos/pulumi/pulumi/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/pulumi.version && \
     curl -fsSL https://api.github.com/repos/helm/helm/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/helm.version && \
     curl -fsSL https://api.github.com/repos/kubernetes-sigs/kustomize/releases/latest | jq -r '.tag_name | split("/")[-1] | ltrimstr("v")' > /tmp/kustomize.version
@@ -147,10 +148,27 @@ RUN set -euxo pipefail \
 ## Layer 5: Python verification
 RUN python3 --version && python3 -m pip --version
 
-## Layer 6: Java verification
+## Layer 6: uv installation with version pinning
+COPY --from=version-fetcher /tmp/uv.version /tmp/uv.version
+
+RUN set -euxo pipefail \
+    && UV_VER=$(cat /tmp/uv.version) \
+    && echo "Installing uv ${UV_VER}" \
+    && rm -rf /opt/uv \
+    && python3 -m venv /opt/uv \
+    && /opt/uv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/uv/bin/pip install --no-cache-dir "uv==${UV_VER}" \
+    && ln -sf /opt/uv/bin/uv /usr/local/bin/uv \
+    && ln -sf /opt/uv/bin/uvx /usr/local/bin/uvx \
+    && command -v uv \
+    && command -v uvx \
+    && uv --version \
+    && uvx --help >/dev/null 2>&1
+
+## Layer 7: Java verification
 RUN java -version || true
 
-## Layer 7: Core npm package managers with versions
+## Layer 8: Core npm package managers with versions
 COPY --from=version-fetcher /tmp/npm.version /tmp/yarn.version /tmp/pnpm.version /tmp/
 
 RUN set -euxo pipefail \
@@ -162,7 +180,7 @@ RUN set -euxo pipefail \
     && npm cache clean --force \
     && npm --version && yarn --version && pnpm --version
 
-## Layer 8: AI CLI tools with versions
+## Layer 9: AI CLI tools with versions
 COPY --from=version-fetcher /tmp/codex.version /tmp/gemini.version /tmp/claude.version /tmp/moon.version /tmp/
 
 RUN set -euxo pipefail \
@@ -177,7 +195,7 @@ RUN set -euxo pipefail \
     && gemini -h >/dev/null 2>&1 || true \
     && claude -h >/dev/null 2>&1 || claude-code -h >/dev/null 2>&1 || true
 
-## Layer 9: C2M CLI with version pinning
+## Layer 10: C2M CLI with version pinning
 COPY --from=version-fetcher /tmp/c2m.version /tmp/c2m.version
 
 RUN set -euxo pipefail \
@@ -187,7 +205,7 @@ RUN set -euxo pipefail \
     && npm cache clean --force \
     && command -v c2m
 
-## Layer 10: Wrangler CLI with version pinning
+## Layer 11: Wrangler CLI with version pinning
 COPY --from=version-fetcher /tmp/wrangler.version /tmp/wrangler.version
 
 RUN set -euxo pipefail \
@@ -197,7 +215,7 @@ RUN set -euxo pipefail \
     && npm cache clean --force \
     && wrangler --version
 
-## Layer 11: Bazel installation with version pinning
+## Layer 12: Bazel installation with version pinning
 COPY --from=version-fetcher /tmp/bazel.version /tmp/bazel.version
 
 RUN set -euxo pipefail \
@@ -209,7 +227,7 @@ RUN set -euxo pipefail \
     && chmod 0755 /usr/local/bin/bazel \
     && bazel --version
 
-## Layer 12: OpenTofu installation with version pinning
+## Layer 13: OpenTofu installation with version pinning
 COPY --from=version-fetcher /tmp/opentofu.version /tmp/opentofu.version
 
 RUN set -euxo pipefail \
@@ -222,7 +240,7 @@ RUN set -euxo pipefail \
     && rm -f /tmp/tofu.deb \
     && tofu version
 
-## Layer 13: AWS CLI installation with version pinning
+## Layer 14: AWS CLI installation with version pinning
 COPY --from=version-fetcher /tmp/awscli.version /tmp/awscli.version
 
 RUN set -euxo pipefail \
@@ -235,7 +253,7 @@ RUN set -euxo pipefail \
     && ln -sf /opt/aws-cli/bin/aws /usr/local/bin/aws \
     && aws --version
 
-## Layer 14: Google Cloud CLI installation with version pinning
+## Layer 15: Google Cloud CLI installation with version pinning
 COPY --from=version-fetcher /tmp/gcloud.version /tmp/gcloud.version
 
 RUN set -euxo pipefail \
@@ -253,7 +271,7 @@ RUN set -euxo pipefail \
     && ln -sf /opt/google-cloud-sdk/bin/bq /usr/local/bin/bq \
     && gcloud version | head -n 1
 
-## Layer 15: Azure CLI installation with version pinning
+## Layer 16: Azure CLI installation with version pinning
 COPY --from=version-fetcher /tmp/azure-cli.version /tmp/azure-cli.version
 
 RUN set -euxo pipefail \
@@ -266,7 +284,7 @@ RUN set -euxo pipefail \
     && ln -sf /opt/azure-cli/bin/az /usr/local/bin/az \
     && az version --query '"azure-cli"' -o tsv
 
-## Layer 16: Pulumi CLI installation with version pinning
+## Layer 17: Pulumi CLI installation with version pinning
 COPY --from=version-fetcher /tmp/pulumi.version /tmp/pulumi.version
 
 RUN set -euxo pipefail \
@@ -282,7 +300,7 @@ RUN set -euxo pipefail \
     && ln -sf /opt/pulumi/pulumi /usr/local/bin/pulumi \
     && pulumi version
 
-## Layer 17: Helm installation with version pinning
+## Layer 18: Helm installation with version pinning
 COPY --from=version-fetcher /tmp/helm.version /tmp/helm.version
 
 RUN set -euxo pipefail \
@@ -291,7 +309,7 @@ RUN set -euxo pipefail \
     && GOPROXY=https://proxy.golang.org,direct GOBIN=/usr/local/bin go install "helm.sh/helm/v4/cmd/helm@v${HELM_VER}" \
     && helm version --short
 
-## Layer 18: kubectl installation with version pinning
+## Layer 19: kubectl installation with version pinning
 COPY --from=version-fetcher /tmp/kubectl.version /tmp/kubectl-package.version /tmp/
 
 RUN set -euxo pipefail \
@@ -308,7 +326,7 @@ RUN set -euxo pipefail \
     && rm -rf /var/lib/apt/lists/* \
     && kubectl version --client=true
 
-## Layer 19: Kustomize installation with version pinning
+## Layer 20: Kustomize installation with version pinning
 COPY --from=version-fetcher /tmp/kustomize.version /tmp/kustomize.version
 
 RUN set -euxo pipefail \
@@ -317,7 +335,7 @@ RUN set -euxo pipefail \
     && GOPROXY=https://proxy.golang.org,direct GOBIN=/usr/local/bin go install "sigs.k8s.io/kustomize/kustomize/v5@v${KUSTOMIZE_VER}" \
     && kustomize version
 
-## Layer 20: Playwright installation with dependencies
+## Layer 21: Playwright installation with dependencies
 COPY --from=version-fetcher /tmp/playwright.version /tmp/playwright.version
 
 RUN set -euxo pipefail \
@@ -330,12 +348,12 @@ RUN set -euxo pipefail \
     && chmod -R a+rx /ms-playwright \
     && npm cache clean --force
 
-## Layer 21: System configuration (locale, environment)
+## Layer 22: System configuration (locale, environment)
 RUN set -euxo pipefail \
     && if [ -f /etc/locale.gen ]; then sed -i 's/^# \?en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen; fi \
     && mkdir -p /src
 
-## Layer 22: Profile.d environment scripts
+## Layer 23: Profile.d environment scripts
 COPY 10-locale.sh /etc/profile.d/10-locale.sh
 COPY 10-lang-paths.sh /etc/profile.d/10-lang-paths.sh
 

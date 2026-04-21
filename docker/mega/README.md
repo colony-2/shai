@@ -8,7 +8,7 @@ A comprehensive Debian-based development environment with modern programming lan
 - **Go** - Latest stable version (overridable)
 - **Rust** - Latest stable version (overridable)
 - **Node.js** - Latest stable version (overridable)
-- **Python 3** - From Debian repositories with pip, venv, and dev tools
+- **Python 3** - From Debian repositories with pip, uv/uvx, venv, and dev tools
 - **Java** - OpenJDK from Debian repositories
 - **C/C++** - GCC, Clang, and build essentials
 
@@ -16,6 +16,7 @@ A comprehensive Debian-based development environment with modern programming lan
 - **npm, yarn, pnpm** - Latest versions from npm registry
 - **cargo** - Rust package manager
 - **pip** - Python package manager
+- **uv / uvx** - Fast Python package manager and tool runner
 - **bazel** - Bazel build system
 - **build-essential** - GCC, make, and core build tools
 
@@ -62,7 +63,7 @@ This image uses a **multi-stage build** to automatically fetch the latest versio
 By default, the following are fetched automatically:
 - **Languages**: Go, Rust, Node.js
 - **npm packages**: npm, yarn, pnpm, c2m, codex, gemini-cli, claude-code, moon, wrangler, playwright
-- **release/source installs**: bazel, opentofu, awscli, gcloud, azure-cli, pulumi, helm, kubectl, kustomize
+- **other pinned installs**: uv, bazel, opentofu, awscli, gcloud, azure-cli, pulumi, helm, kubectl, kustomize
 
 ### Overriding Versions
 
@@ -148,23 +149,24 @@ The Dockerfile is organized into distinct layers for optimal caching:
 3. **Rust installation** - Rust compiler and cargo
 4. **Node.js installation** - Node runtime and npm
 5. **Python verification** - Verify Python installation
-6. **Java verification** - Verify JDK installation
-7. **npm package managers** - npm, yarn, pnpm
-8. **AI CLI tools** - AI assistant CLIs
-9. **C2M CLI** - `@colony2/c2m`
-10. **Wrangler** - Cloudflare Workers CLI
-11. **Bazel** - Bazel release binary
-12. **OpenTofu** - IaC CLI
-13. **AWS CLI** - official tagged source build
-14. **Google Cloud CLI** - official tarball
-15. **Azure CLI** - Python venv install
-16. **Pulumi** - official release tarball
-17. **Helm** - official Go module build
-18. **kubectl** - official Kubernetes apt package
-19. **Kustomize** - official Go module build
-20. **Playwright** - Browser automation with Chromium
-21. **System configuration** - Locale generation
-22. **Profile.d scripts** - Environment variable configuration
+6. **uv** - Python package manager and `uvx` runner
+7. **Java verification** - Verify JDK installation
+8. **npm package managers** - npm, yarn, pnpm
+9. **AI CLI tools** - AI assistant CLIs
+10. **C2M CLI** - `@colony2/c2m`
+11. **Wrangler** - Cloudflare Workers CLI
+12. **Bazel** - Bazel release binary
+13. **OpenTofu** - IaC CLI
+14. **AWS CLI** - official tagged source build
+15. **Google Cloud CLI** - official tarball
+16. **Azure CLI** - Python venv install
+17. **Pulumi** - official release tarball
+18. **Helm** - official Go module build
+19. **kubectl** - official Kubernetes apt package
+20. **Kustomize** - official Go module build
+21. **Playwright** - Browser automation with Chromium
+22. **System configuration** - Locale generation
+23. **Profile.d scripts** - Environment variable configuration
 
 This structure ensures that:
 - Changing npm package versions doesn't rebuild Go/Rust/Node layers
