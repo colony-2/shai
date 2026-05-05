@@ -32,6 +32,7 @@ RUN curl -s https://registry.npmjs.org/npm | jq -r '.["dist-tags"].latest' > /tm
     curl -s https://registry.npmjs.org/@google/gemini-cli | jq -r '.["dist-tags"].latest' > /tmp/gemini.version && \
     curl -s https://registry.npmjs.org/@anthropic-ai/claude-code | jq -r '.["dist-tags"].latest' > /tmp/claude.version && \
     curl -s https://registry.npmjs.org/@colony2/c2m | jq -r '.["dist-tags"].latest' > /tmp/c2m.version && \
+    curl -s https://registry.npmjs.org/@colony2/c2j | jq -r '.["dist-tags"].latest' > /tmp/c2j.version && \
     curl -s https://registry.npmjs.org/@moonrepo/cli | jq -r '.["dist-tags"].latest' > /tmp/moon.version && \
     curl -s https://registry.npmjs.org/wrangler | jq -r '.["dist-tags"].latest' > /tmp/wrangler.version && \
     curl -s https://registry.npmjs.org/playwright | jq -r '.["dist-tags"].latest' > /tmp/playwright.version
@@ -195,15 +196,17 @@ RUN set -euxo pipefail \
     && gemini -h >/dev/null 2>&1 || true \
     && claude -h >/dev/null 2>&1 || claude-code -h >/dev/null 2>&1 || true
 
-## Layer 10: C2M CLI with version pinning
-COPY --from=version-fetcher /tmp/c2m.version /tmp/c2m.version
+## Layer 10: C2M and C2J CLIs with version pinning
+COPY --from=version-fetcher /tmp/c2m.version /tmp/c2j.version /tmp/
 
 RUN set -euxo pipefail \
     && C2M_VER=$(cat /tmp/c2m.version) \
-    && echo "Installing @colony2/c2m ${C2M_VER}" \
-    && npm -g install "@colony2/c2m@${C2M_VER}" \
+    && C2J_VER=$(cat /tmp/c2j.version) \
+    && echo "Installing @colony2/c2m ${C2M_VER} and @colony2/c2j ${C2J_VER}" \
+    && npm -g install "@colony2/c2m@${C2M_VER}" "@colony2/c2j@${C2J_VER}" \
     && npm cache clean --force \
-    && command -v c2m
+    && command -v c2m \
+    && command -v c2j
 
 ## Layer 11: Wrangler CLI with version pinning
 COPY --from=version-fetcher /tmp/wrangler.version /tmp/wrangler.version

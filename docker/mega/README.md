@@ -22,6 +22,7 @@ A comprehensive Debian-based development environment with modern programming lan
 
 ### AI & Development CLIs
 - **@colony2/c2m** - C2M agent memory CLI
+- **@colony2/c2j** - C2J job system CLI
 - **@openai/codex** - OpenAI Codex CLI
 - **@google/gemini-cli** - Google Gemini CLI
 - **@anthropic-ai/claude-code** - Anthropic Claude Code CLI
@@ -62,7 +63,7 @@ This image uses a **multi-stage build** to automatically fetch the latest versio
 
 By default, the following are fetched automatically:
 - **Languages**: Go, Rust, Node.js
-- **npm packages**: npm, yarn, pnpm, c2m, codex, gemini-cli, claude-code, moon, wrangler, playwright
+- **npm packages**: npm, yarn, pnpm, c2m, c2j, codex, gemini-cli, claude-code, moon, wrangler, playwright
 - **other pinned installs**: uv, bazel, opentofu, awscli, gcloud, azure-cli, pulumi, helm, kubectl, kustomize
 
 ### Overriding Versions
@@ -153,7 +154,7 @@ The Dockerfile is organized into distinct layers for optimal caching:
 7. **Java verification** - Verify JDK installation
 8. **npm package managers** - npm, yarn, pnpm
 9. **AI CLI tools** - AI assistant CLIs
-10. **C2M CLI** - `@colony2/c2m`
+10. **C2M/C2J CLIs** - `@colony2/c2m`, `@colony2/c2j`
 11. **Wrangler** - Cloudflare Workers CLI
 12. **Bazel** - Bazel release binary
 13. **OpenTofu** - IaC CLI
