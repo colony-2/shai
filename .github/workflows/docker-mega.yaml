@@ -34,17 +34,18 @@ jobs:
             platform: linux/arm64
             variant: standard
             base_image: debian:bookworm-slim
-          # DinD variant (cruizba/ubuntu-dind)
+          # DinD variant. Pin to Ubuntu 24.04 because Playwright does not
+          # publish dependency/browser mappings for Ubuntu 26.04 yet.
           - arch: amd64
             runner: ubuntu-latest
             platform: linux/amd64
             variant: dind
-            base_image: cruizba/ubuntu-dind
+            base_image: cruizba/ubuntu-dind:noble-29.5.2-r1
           - arch: arm64
             runner: ubuntu-22.04-arm
             platform: linux/arm64
             variant: dind
-            base_image: cruizba/ubuntu-dind
+            base_image: cruizba/ubuntu-dind:noble-29.5.2-r1
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
