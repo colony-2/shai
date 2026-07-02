@@ -38,7 +38,8 @@ RUN curl -s https://registry.npmjs.org/npm | jq -r '.["dist-tags"].latest' > /tm
     curl -s https://registry.npmjs.org/playwright | jq -r '.["dist-tags"].latest' > /tmp/playwright.version
 
 # Fetch latest versions of infra and platform CLIs
-RUN curl -fsSL https://api.github.com/repos/bazelbuild/bazel/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/bazel.version && \
+RUN curl --retry 5 --retry-all-errors --retry-delay 2 -fsSL 'https://api.github.com/repos/bazelbuild/bazel/releases?per_page=30' | \
+      jq -er '[.[] | select(.draft | not) | select(.prerelease | not) | . as $release | ($release.tag_name | ltrimstr("v")) as $version | select(([$release.assets[].name] | index("bazel-\($version)-linux-x86_64")) and ([$release.assets[].name] | index("bazel-\($version)-linux-arm64"))) | $version][0] // error("no stable Bazel release with linux x86_64 and arm64 assets found")' > /tmp/bazel.version && \
     curl -fsSL https://api.github.com/repos/opentofu/opentofu/releases/latest | jq -r '.tag_name | ltrimstr("v")' > /tmp/opentofu.version && \
     curl -fsSL https://api.github.com/repos/aws/aws-cli/tags?per_page=1 | jq -r '.[0].name' > /tmp/awscli.version && \
     curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/components-2.json | jq -r '.version' > /tmp/gcloud.version && \
@@ -226,7 +227,7 @@ RUN set -euxo pipefail \
     && echo "Installing Bazel ${BAZEL_VER}" \
     && arch=$(dpkg --print-architecture) \
     && case "$arch" in amd64) BAZEL_ARCH=x86_64 ;; arm64) BAZEL_ARCH=arm64 ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac \
-    && curl -fsSL "https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VER}/bazel-${BAZEL_VER}-linux-${BAZEL_ARCH}" -o /usr/local/bin/bazel \
+    && curl --retry 5 --retry-all-errors --retry-delay 2 -fsSL "https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VER}/bazel-${BAZEL_VER}-linux-${BAZEL_ARCH}" -o /usr/local/bin/bazel \
     && chmod 0755 /usr/local/bin/bazel \
     && bazel --version
 
