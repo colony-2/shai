@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -193,7 +194,16 @@ func runShaiRemote(t *testing.T, extraEnv []string, args ...string) (stdout, std
 	defer cancel()
 
 	script := scriptPath(t)
-	cmd := exec.CommandContext(ctx, script, args...)
+
+	// On Windows, we need to invoke bash explicitly since the shell script won't execute directly
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmdArgs := append([]string{script}, args...)
+		cmd = exec.CommandContext(ctx, "bash", cmdArgs...)
+	} else {
+		cmd = exec.CommandContext(ctx, script, args...)
+	}
+
 	cmd.Env = append(os.Environ(), extraEnv...)
 	var outBuf bytes.Buffer
 	var errBuf bytes.Buffer
@@ -216,7 +226,10 @@ func runShaiRemote(t *testing.T, extraEnv []string, args ...string) (stdout, std
 func scriptPath(t *testing.T) string {
 	t.Helper()
 	root := repoRoot(t)
-	script := filepath.Join(root, "bin", "shai-remote")
+
+	// shai-remote is a shell script that we invoke directly on Unix
+	// or via bash on Windows (see runShaiRemote)
+	script := filepath.Join(root, "internal", "shai", "runtime", "bootstrap", "shai-remote.sh")
 	if _, err := os.Stat(script); err != nil {
 		t.Fatalf("shai-remote script missing: %v", err)
 	}

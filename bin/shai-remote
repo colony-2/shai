@@ -1,5 +1,0 @@
-#!/bin/sh
-set -e
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-TARGET="$SCRIPT_DIR/../internal/shai/runtime/bootstrap/shai-remote.sh"
-exec "$TARGET" "$@"

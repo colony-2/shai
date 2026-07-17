@@ -62,7 +62,7 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 		// Base mount: read-only
 		{
 			Type:     mount.TypeBind,
-			Source:   m.WorkingDir,
+			Source:   filepath.ToSlash(m.WorkingDir),
 			Target:   "/src",
 			ReadOnly: true,
 		},
@@ -81,8 +81,8 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 		} else {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
-				Source:   filepath.Join(m.WorkingDir, rwPath),
-				Target:   filepath.Join("/src", rwPath),
+				Source:   filepath.ToSlash(filepath.Join(m.WorkingDir, rwPath)),
+				Target:   filepath.ToSlash(filepath.Join("/src", rwPath)),
 				ReadOnly: false,
 			})
 		}
@@ -93,8 +93,8 @@ func (m *MountBuilder) BuildMounts() []mount.Mount {
 		if info, err := os.Stat(configDir); err == nil && info.IsDir() {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
-				Source:   configDir,
-				Target:   filepath.Join("/src", ConfigDirName),
+				Source:   filepath.ToSlash(configDir),
+				Target:   filepath.ToSlash(filepath.Join("/src", ConfigDirName)),
 				ReadOnly: true,
 			})
 		}
@@ -170,7 +170,7 @@ func (m *MountBuilder) BuildMountStrings() []string {
 			mountStrings = append(mountStrings, fmt.Sprintf(
 				"%s:/src/%s:rw",
 				filepath.Join(m.WorkingDir, rwPath),
-				rwPath,
+				filepath.ToSlash(rwPath),
 			))
 		}
 	}
@@ -181,7 +181,7 @@ func (m *MountBuilder) BuildMountStrings() []string {
 			mountStrings = append(mountStrings, fmt.Sprintf(
 				"%s:/src/%s:ro",
 				configDir,
-				ConfigDirName,
+				filepath.ToSlash(ConfigDirName),
 			))
 		}
 	}

@@ -25,8 +25,7 @@ jobs:
           # - os: macos-latest
 
           # Windows AMD64
-          # Disabled until we fix shai to work on Windows
-          # - os: windows-2025
+          - os: windows-2025
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
