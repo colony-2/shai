@@ -182,6 +182,7 @@ RUN set -euxo pipefail \
 RUN java -version || true
 
 ## Layer 8: Core npm package managers with versions
+# Allow lifecycle scripts for all packages and dependencies installed during the build.
 COPY --from=version-fetcher /tmp/npm.version /tmp/yarn.version /tmp/pnpm.version /tmp/
 
 RUN set -euxo pipefail \
@@ -189,7 +190,7 @@ RUN set -euxo pipefail \
     && YARN_VER=$(cat /tmp/yarn.version) \
     && PNPM_VER=$(cat /tmp/pnpm.version) \
     && echo "Installing npm@${NPM_VER} yarn@${YARN_VER} pnpm@${PNPM_VER}" \
-    && npm -g install "npm@${NPM_VER}" "yarn@${YARN_VER}" "pnpm@${PNPM_VER}" \
+    && npm -g install --dangerously-allow-all-scripts "npm@${NPM_VER}" "yarn@${YARN_VER}" "pnpm@${PNPM_VER}" \
     && npm cache clean --force \
     && npm --version && yarn --version && pnpm --version
 
@@ -202,23 +203,24 @@ RUN set -euxo pipefail \
     && CLAUDE_VER=$(cat /tmp/claude.version) \
     && MOON_VER=$(cat /tmp/moon.version) \
     && echo "Installing AI CLIs: codex@${CODEX_VER} gemini@${GEMINI_VER} claude@${CLAUDE_VER} moon@${MOON_VER}" \
-    && npm -g install "@openai/codex@${CODEX_VER}" "@google/gemini-cli@${GEMINI_VER}" "@anthropic-ai/claude-code@${CLAUDE_VER}" "@moonrepo/cli@${MOON_VER}" \
+    && npm -g install --dangerously-allow-all-scripts "@openai/codex@${CODEX_VER}" "@google/gemini-cli@${GEMINI_VER}" "@anthropic-ai/claude-code@${CLAUDE_VER}" "@moonrepo/cli@${MOON_VER}" \
     && npm cache clean --force \
     && codex -h >/dev/null 2>&1 || true \
     && gemini -h >/dev/null 2>&1 || true \
     && claude -h >/dev/null 2>&1 || claude-code -h >/dev/null 2>&1 || true
 
 ## Layer 10: C2M and C2J CLIs with version pinning
+# Both packages require postinstall scripts to download their native binaries.
 COPY --from=version-fetcher /tmp/c2m.version /tmp/c2j.version /tmp/
 
 RUN set -euxo pipefail \
     && C2M_VER=$(cat /tmp/c2m.version) \
     && C2J_VER=$(cat /tmp/c2j.version) \
     && echo "Installing @colony2/c2m ${C2M_VER} and @colony2/c2j ${C2J_VER}" \
-    && npm -g install "@colony2/c2m@${C2M_VER}" "@colony2/c2j@${C2J_VER}" \
+    && npm -g install --dangerously-allow-all-scripts "@colony2/c2m@${C2M_VER}" "@colony2/c2j@${C2J_VER}" \
     && npm cache clean --force \
-    && command -v c2m \
-    && command -v c2j
+    && c2m --help >/dev/null \
+    && c2j --help >/dev/null
 
 ## Layer 11: Wrangler CLI with version pinning
 COPY --from=version-fetcher /tmp/wrangler.version /tmp/wrangler.version
@@ -226,7 +228,7 @@ COPY --from=version-fetcher /tmp/wrangler.version /tmp/wrangler.version
 RUN set -euxo pipefail \
     && WRANGLER_VER=$(cat /tmp/wrangler.version) \
     && echo "Installing wrangler ${WRANGLER_VER}" \
-    && npm -g install "wrangler@${WRANGLER_VER}" \
+    && npm -g install --dangerously-allow-all-scripts "wrangler@${WRANGLER_VER}" \
     && npm cache clean --force \
     && wrangler --version
 
@@ -358,8 +360,8 @@ RUN set -euxo pipefail \
     && echo "Installing Playwright ${PLAYWRIGHT_VER}" \
     && mkdir -p /ms-playwright \
     && chmod -R a+rx /ms-playwright \
-    && npm -g install "playwright@${PLAYWRIGHT_VER}" \
-    && npx playwright install --with-deps chromium \
+    && npm -g install --dangerously-allow-all-scripts "playwright@${PLAYWRIGHT_VER}" \
+    && npx --dangerously-allow-all-scripts playwright install --with-deps chromium \
     && chmod -R a+rx /ms-playwright \
     && npm cache clean --force
 
